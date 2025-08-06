@@ -48,7 +48,7 @@ spring:
             client-secret: ${GOOGLE_CLIENT_SECRET}
             client-name: Google
             authorization-grant-type: authorization_code
-            redirect-uri: 'https://api.ticket-mon.o-r.kr/login/oauth2/code/google'
+            redirect-uri: 'https://ticklingticket.com/login/oauth2/code/google'
             scope:
               - profile
               - email
@@ -57,7 +57,7 @@ spring:
             client-secret: ${NAVER_CLIENT_SECRET}
             client-name: Naver
             authorization-grant-type: authorization_code
-            redirect-uri: 'https://api.ticket-mon.o-r.kr/login/oauth2/code/naver'
+            redirect-uri: 'https://ticklingticket.com/login/oauth2/code/naver'
             scope:
               - name
               - email
@@ -68,7 +68,7 @@ spring:
             client-name: Kakao
             client-authentication-method: client_secret_post
             authorization-grant-type: authorization_code
-            redirect-uri: 'https://api.ticket-mon.o-r.kr/login/oauth2/code/kakao'
+            redirect-uri: 'https://ticklingticket.com/login/oauth2/code/kakao'
             scope:
               - profile_nickname
               - account_email
@@ -155,9 +155,8 @@ ai:
 # 🌍 CORS 설정
 cors:
   allowed-origins:
-    - "https://ticket-mon.o-r.kr"          # 프론트엔드 도메인
-    - "https://api.ticket-mon.o-r.kr"      # API 도메인
-
+    - "https://ticklingticket.com"
+    - "https://api.ticklingticket.com"
 onesignal:
   app-id: ${ONESIGNAL_APP_ID}        # 운영 환경에서 환경 변수로 관리
   api-key: ${ONESIGNAL_API_KEY}
