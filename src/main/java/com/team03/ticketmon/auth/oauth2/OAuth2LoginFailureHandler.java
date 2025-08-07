@@ -23,13 +23,7 @@ public class OAuth2LoginFailureHandler implements AuthenticationFailureHandler {
     public void onAuthenticationFailure(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException {
         String frontUrl = appProperties.frontBaseUrl();
 
-        System.out.println("🔥 Exception type: " + exception.getClass().getName());
-        System.out.println("🔥 Exception message: " + exception.getMessage());
-        System.out.println("🔥 Exception cause: " + exception.getCause());
-
         if (exception instanceof OAuth2AuthenticationException) {
-            System.out.println("🔥 OAuth2AuthenticationException 감지!");
-
             OAuth2AuthenticationException ex = (OAuth2AuthenticationException) exception;
 
             if (NEED_SIGNUP_ERROR_CODE.equals(ex.getError().getErrorCode())) {
@@ -42,8 +36,6 @@ public class OAuth2LoginFailureHandler implements AuthenticationFailureHandler {
                 response.sendRedirect(registerUrl);
                 return;
             }
-        } else {
-            System.out.println("🔥 다른 타입의 예외입니다!");
         }
 
         // 기본 실패 처리
