@@ -71,7 +71,7 @@ spring:
             redirect-uri: 'https://ticklingticket.com/login/oauth2/code/kakao'
             scope:
               - profile_nickname
-              - account_email
+              - profile_image
             provider: kakao
         provider:
           naver:
