@@ -84,7 +84,6 @@ public class SeatStatusService {
         RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
 
         SeatStatus status = seatMap.get(concertSeatId.toString());
-        log.info("redis에 저장된 status:{}",status);
 
         // ✅ 캐시에 없고 전체 캐시도 비어있으면 초기화 시도
         if (status == null && seatMap.size() == 0) {
