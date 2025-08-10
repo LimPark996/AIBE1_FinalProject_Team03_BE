@@ -121,6 +121,11 @@ public class BookingService {
             try {
                 Long seatId = ticket.getConcertSeat().getConcertSeatId();
                 seatStatusService.releaseSeat(concertId, seatId, booking.getUserId());
+                ConcertSeat concertSeat = ticket.getConcertSeat();
+                if (concertSeat != null) {
+                    concertSeat.releaseTicket(); // ConcertSeat의 ticket 필드를 null로 설정
+                    ticket.releaseConcertSeat();  // Ticket의 concertSeat 필드를 null로 설정
+                }
             } catch (SeatReservationException e) {
                 log.warn("[Cancel] 좌석 해제 스킵: seatId={}, 이유={}",
                         ticket.getConcertSeat().getConcertSeatId(),
@@ -134,6 +139,8 @@ public class BookingService {
 
         // 히스토리 테이블로 이관하는 로직 호출
         archiveBookingAndTickets(booking);
+
+        booking.removeAllTickets();
 
         bookingRepository.save(booking);
         log.info("finalizeCancellationById 완료: bookingId={}", bookingId);
