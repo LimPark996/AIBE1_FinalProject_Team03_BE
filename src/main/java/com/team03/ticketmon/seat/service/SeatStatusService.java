@@ -312,10 +312,10 @@ public class SeatStatusService {
         SeatStatus currentSeat = currentStatus.get();
 
         // 1. 좌석 상태가 RESERVED인지 확인
-        if (!currentSeat.isReserved()) {
-            log.warn("선점되지 않은 좌석 해제 시도: concertId={}, concertSeatId={}, userId={}, currentStatus={}",
+        if (!currentSeat.isReserved() && currentSeat.getStatus() != SeatStatus.SeatStatusEnum.BOOKED) {
+            log.warn("해제 불가능한 좌석 상태: concertId={}, concertSeatId={}, userId={}, currentStatus={}",
                     concertId, concertSeatId, userId, currentSeat.getStatus());
-            throw new SeatReservationException("선점되지 않은 좌석은 해제할 수 없습니다. 현재 상태: " + currentSeat.getStatus());
+            throw new SeatReservationException("해제할 수 없는 좌석 상태입니다. 현재 상태: " + currentSeat.getStatus());
         }
 
         // 2. 해제 요청 사용자가 선점한 사용자와 일치하는지 확인
