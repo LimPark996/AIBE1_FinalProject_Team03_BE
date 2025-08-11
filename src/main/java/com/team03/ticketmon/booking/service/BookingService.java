@@ -98,6 +98,7 @@ public class BookingService {
      */
     private void cleanupIncompleteBookingsForSeats(List<ConcertSeat> selectedSeats, Long userId) {
         List<Long> cleanedBookingIds = new ArrayList<>();
+        List<ConcertSeat> seatsToRestore = new ArrayList<>();
 
         for (ConcertSeat seat : selectedSeats) {
             if (seat.getTicket() != null) {
@@ -117,6 +118,7 @@ public class BookingService {
 
                                 cleanupPendingBooking(bookingId);
                                 cleanedBookingIds.add(bookingId);
+                                seatsToRestore.add(seat);
                             }
                         }
                     }
@@ -128,8 +130,32 @@ public class BookingService {
         if (!cleanedBookingIds.isEmpty()) {
             Long concertId = selectedSeats.get(0).getConcert().getConcertId();
             refreshSeatCache(concertId);
+            restoreSeatsToReserved(seatsToRestore, userId);
             log.info("미완성 예매 정리 완료, 캐시 새로고침: concertId={}, cleanedBookings={}",
                     concertId, cleanedBookingIds);
+        }
+    }
+
+    /**
+     * 좌석들을 RESERVED 상태로 복원 (기존 reserveSeat 메서드 재사용)
+     */
+    private void restoreSeatsToReserved(List<ConcertSeat> seatsToRestore, Long userId) {
+        for (ConcertSeat seat : seatsToRestore) {
+            try {
+                Long concertId = seat.getConcert().getConcertId();
+                Long concertSeatId = seat.getConcertSeatId();
+                String seatInfo = seat.getSeatInfo();
+
+                // 기존 reserveSeat 메서드 재사용 - AVAILABLE -> RESERVED 처리
+                seatStatusService.reserveSeat(concertId, concertSeatId, userId, seatInfo);
+
+                log.info("좌석 RESERVED 상태로 복원: concertId={}, concertSeatId={}, userId={}",
+                        concertId, concertSeatId, userId);
+
+            } catch (Exception e) {
+                log.error("좌석 복원 실패: seatId={}, userId={}",
+                        seat.getConcertSeatId(), userId, e);
+            }
         }
     }
 

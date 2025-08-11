@@ -80,4 +80,21 @@ public class ConcertSeat {
 	public void releaseTicket() {
 		this.ticket = null;
 	}
+
+	/**
+	 * 좌석 정보를 문자열로 반환
+	 * Redis SeatStatus에서 사용할 seatInfo 생성
+	 * @return 좌석 정보 문자열 (예: "A-1-15", "B-2-20")
+	 */
+	public String getSeatInfo() {
+		if (this.seat == null) {
+			return "Unknown";
+		}
+
+		// 좌석 정보 포맷: 구역-열-번호 (A-1-15)
+		return String.format("%s-%s-%d",
+				this.seat.getSection() != null ? this.seat.getSection() : "?",
+				this.seat.getSeatRow() != null ? this.seat.getSeatRow() : "?",
+				this.seat.getSeatNumber() != null ? this.seat.getSeatNumber() : 0);
+	}
 }
