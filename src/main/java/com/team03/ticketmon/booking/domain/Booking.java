@@ -147,16 +147,22 @@ public class Booking extends BaseTimeEntity {
 			.map(Ticket::createTicket)
 			.toList();
 
+		// 2. 티켓 총액 계산
+		BigDecimal ticketSubtotal = tickets.stream()
+				.map(Ticket::getPrice)
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+
+		// 3. 수수료 추가 (2000원)
+		BigDecimal serviceFee = new BigDecimal("2000");
+		BigDecimal totalAmount = ticketSubtotal.add(serviceFee);
+
 		// 2. Booking 뼈대 생성
 		Booking booking = Booking.builder()
 			.userId(userId)
 			.concert(concert)
 			.bookingNumber(UUID.randomUUID().toString())
 			.status(BookingStatus.PENDING_PAYMENT)
-			.totalAmount(tickets.stream()
-				.map(Ticket::getPrice)
-				.reduce(BigDecimal.ZERO, BigDecimal::add)
-			)
+			.totalAmount(totalAmount)
 			.build();
 
 		// 3. 생성된 Booking에 Ticket 목록 설정 (양방향 관계 확립)
