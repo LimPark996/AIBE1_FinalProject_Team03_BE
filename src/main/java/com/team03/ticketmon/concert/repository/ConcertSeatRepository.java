@@ -128,4 +128,37 @@ public interface ConcertSeatRepository extends JpaRepository<ConcertSeat, Long> 
 	@Query("DELETE FROM Ticket t " +
 			"WHERE t.concertSeat.concert.concertId = :concertId")
 	int bulkUpdateAllSeatsToAvailable(@Param("concertId") Long concertId);
+
+	/**
+	 * 특정 콘서트의 모든 좌석과 가격 정보 조회 (가격 조회 전용)
+	 * SeatPriceService에서 사용
+	 */
+	@Query("SELECT cs FROM ConcertSeat cs " +
+			"JOIN FETCH cs.seat s " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"ORDER BY s.section, s.seatRow, s.seatNumber")
+	List<ConcertSeat> findByConcertConcertIdWithSeat(@Param("concertId") Long concertId);
+
+	/**
+	 * 선택된 좌석들의 가격 정보 조회 (가격 조회 전용)
+	 * SeatPriceService에서 사용
+	 */
+	@Query("SELECT cs FROM ConcertSeat cs " +
+			"JOIN FETCH cs.seat s " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"AND cs.concertSeatId IN :seatIds " +
+			"ORDER BY s.section, s.seatRow, s.seatNumber")
+	List<ConcertSeat> findByConcertConcertIdAndConcertSeatIdInWithSeat(
+			@Param("concertId") Long concertId,
+			@Param("seatIds") List<Long> seatIds);
+
+	/**
+	 * 선택된 좌석들의 존재 여부 확인 (가격 조회 전 검증용)
+	 * SeatPriceService에서 사용
+	 */
+	@Query("SELECT COUNT(cs) FROM ConcertSeat cs " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"AND cs.concertSeatId IN :seatIds")
+	long countByConcertIdAndConcertSeatIdIn(@Param("concertId") Long concertId,
+											@Param("seatIds") List<Long> seatIds);
 }
