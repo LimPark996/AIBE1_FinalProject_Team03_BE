@@ -107,19 +107,22 @@ public class BookingService {
                 if (existingBooking != null) {
                     // PENDING_PAYMENT 상태의 미완성 예매만 정리
                     if (existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-                        // 같은 사용자의 미완성 예매인 경우 정리
-                        if (existingBooking.getUserId().equals(userId)) {
-                            Long bookingId = existingBooking.getBookingId();
-                            if (!cleanedBookingIds.contains(bookingId)) {
-                                log.warn("미완성 예매 데이터 정리 시작: bookingId={}, seatId={}, " +
+                        Long bookingId = existingBooking.getBookingId();
+                        Long existingUserId = existingBooking.getUserId();
+                        if (!cleanedBookingIds.contains(bookingId)) {
+                            if (existingUserId.equals(userId)) {
+                                // Case 1: 같은 사용자의 미완성 예매
+                                log.warn("같은 사용자의 미완성 예매 데이터 정리 시작: bookingId={}, seatId={}, userId={}",
+                                        bookingId, seat.getConcertSeatId(), userId);
+                            } else {
+                                // Case 2: 다른 사용자의 미완성 예매
+                                log.warn("다른 사용자의 미완성 예매 데이터 정리 시작: bookingId={}, seatId={}, " +
                                                 "existingUserId={}, requestUserId={}",
-                                        bookingId, seat.getConcertSeatId(),
-                                        existingBooking.getUserId(), userId);
-
-                                cleanupPendingBooking(bookingId);
-                                cleanedBookingIds.add(bookingId);
-                                seatsToRestore.add(seat);
+                                        bookingId, seat.getConcertSeatId(), existingUserId, userId);
                             }
+                            cleanupPendingBooking(bookingId);
+                            cleanedBookingIds.add(bookingId);
+                            seatsToRestore.add(seat);
                         }
                     }
                 }
@@ -131,8 +134,8 @@ public class BookingService {
             Long concertId = selectedSeats.get(0).getConcert().getConcertId();
             refreshSeatCache(concertId);
             restoreSeatsToReserved(seatsToRestore, userId);
-            log.info("미완성 예매 정리 완료, 캐시 새로고침: concertId={}, cleanedBookings={}",
-                    concertId, cleanedBookingIds);
+            log.info("미완성 예매 정리 및 좌석 복원 완료, 캐시 새로고침: concertId={}, cleanedBookings={}, restoredSeats={}",
+                    concertId, cleanedBookingIds, seatsToRestore.size());
         }
     }
 
