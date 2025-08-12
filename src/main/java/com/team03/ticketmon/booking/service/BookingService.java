@@ -29,6 +29,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 
 /**
@@ -143,7 +144,13 @@ public class BookingService {
      * 좌석들을 RESERVED 상태로 복원 (기존 reserveSeat 메서드 재사용)
      */
     private void restoreSeatsToReserved(List<ConcertSeat> seatsToRestore, Long userId) {
+        log.info("복원 대상 좌석 목록: {}",
+                seatsToRestore.stream()
+                        .map(seat -> seat.getConcertSeatId())
+                        .collect(Collectors.toList()));
+
         for (ConcertSeat seat : seatsToRestore) {
+            log.info("좌석 복원 시작: seatId={}", seat.getConcertSeatId());
             try {
                 Long concertId = seat.getConcert().getConcertId();
                 Long concertSeatId = seat.getConcertSeatId();
