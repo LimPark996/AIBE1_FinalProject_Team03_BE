@@ -26,9 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -98,45 +96,43 @@ public class BookingService {
      * 선택된 좌석들과 연관된 미완성 예매 데이터 정리
      */
     private void cleanupIncompleteBookingsForSeats(List<ConcertSeat> selectedSeats, Long userId) {
-        List<Long> cleanedBookingIds = new ArrayList<>();
+        Set<Long> processedBookingIds = new HashSet<>();
         List<ConcertSeat> seatsToRestore = new ArrayList<>();
+
+        Map<Long, List<ConcertSeat>> bookingToSelectedSeats = new HashMap<>();
 
         for (ConcertSeat seat : selectedSeats) {
             if (seat.getTicket() != null) {
                 Booking existingBooking = seat.getTicket().getBooking();
 
-                if (existingBooking != null) {
-                    // PENDING_PAYMENT 상태의 미완성 예매만 정리
-                    if (existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-                        Long bookingId = existingBooking.getBookingId();
-                        Long existingUserId = existingBooking.getUserId();
-                        if (!cleanedBookingIds.contains(bookingId)) {
-                            if (existingUserId.equals(userId)) {
-                                // Case 1: 같은 사용자의 미완성 예매
-                                log.warn("같은 사용자의 미완성 예매 데이터 정리 시작: bookingId={}, seatId={}, userId={}",
-                                        bookingId, seat.getConcertSeatId(), userId);
-                            } else {
-                                // Case 2: 다른 사용자의 미완성 예매
-                                log.warn("다른 사용자의 미완성 예매 데이터 정리 시작: bookingId={}, seatId={}, " +
-                                                "existingUserId={}, requestUserId={}",
-                                        bookingId, seat.getConcertSeatId(), existingUserId, userId);
-                            }
-                            cleanupPendingBooking(bookingId);
-                            cleanedBookingIds.add(bookingId);
-                            seatsToRestore.add(seat);
-                        }
-                    }
+                if (existingBooking != null &&
+                        existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+
+                    Long bookingId = existingBooking.getBookingId();
+                    bookingToSelectedSeats.computeIfAbsent(bookingId, k -> new ArrayList<>()).add(seat);
                 }
             }
         }
 
-        // 정리된 예매가 있다면 캐시도 초기화
-        if (!cleanedBookingIds.isEmpty()) {
+        for (Map.Entry<Long, List<ConcertSeat>> entry : bookingToSelectedSeats.entrySet()) {
+            Long bookingId = entry.getKey();
+            List<ConcertSeat> selectedSeatsInBooking = entry.getValue();
+
+            // 예매 정리 (이제 모든 ticket이 null이 됨)
+            cleanupPendingBooking(bookingId);
+            processedBookingIds.add(bookingId);
+
+            // 선택된 좌석들만 복원 대상에 추가
+            seatsToRestore.addAll(selectedSeatsInBooking);
+        }
+
+        // 3단계: 캐시 새로고침 및 복원
+        if (!processedBookingIds.isEmpty()) {
             Long concertId = selectedSeats.get(0).getConcert().getConcertId();
             refreshSeatCache(concertId);
             restoreSeatsToReserved(seatsToRestore, userId);
-            log.info("미완성 예매 정리 및 좌석 복원 완료, 캐시 새로고침: concertId={}, cleanedBookings={}, restoredSeats={}",
-                    concertId, cleanedBookingIds, seatsToRestore.size());
+            log.info("미완성 예매 정리 및 좌석 복원 완료: cleanedBookings={}, restoredSeats={}",
+                    processedBookingIds, seatsToRestore.size());
         }
     }
 
