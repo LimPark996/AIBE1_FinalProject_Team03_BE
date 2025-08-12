@@ -97,42 +97,29 @@ public class BookingService {
      */
     private void cleanupIncompleteBookingsForSeats(List<ConcertSeat> selectedSeats, Long userId) {
         Set<Long> processedBookingIds = new HashSet<>();
-        List<ConcertSeat> seatsToRestore = new ArrayList<>();
 
-        Map<Long, List<ConcertSeat>> bookingToSelectedSeats = new HashMap<>();
-
+        // 1. 관련된 기존 예매들 정리
         for (ConcertSeat seat : selectedSeats) {
             if (seat.getTicket() != null) {
                 Booking existingBooking = seat.getTicket().getBooking();
 
                 if (existingBooking != null &&
-                        existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+                        existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT &&
+                        !processedBookingIds.contains(existingBooking.getBookingId())) {
 
-                    Long bookingId = existingBooking.getBookingId();
-                    bookingToSelectedSeats.computeIfAbsent(bookingId, k -> new ArrayList<>()).add(seat);
+                    cleanupPendingBooking(existingBooking.getBookingId());
+                    processedBookingIds.add(existingBooking.getBookingId());
                 }
             }
         }
 
-        for (Map.Entry<Long, List<ConcertSeat>> entry : bookingToSelectedSeats.entrySet()) {
-            Long bookingId = entry.getKey();
-            List<ConcertSeat> selectedSeatsInBooking = entry.getValue();
-
-            // 예매 정리 (이제 모든 ticket이 null이 됨)
-            cleanupPendingBooking(bookingId);
-            processedBookingIds.add(bookingId);
-
-            // 선택된 좌석들만 복원 대상에 추가
-            seatsToRestore.addAll(selectedSeatsInBooking);
-        }
-
-        // 3단계: 캐시 새로고침 및 복원
+        // 2. 캐시 새로고침 및 선택된 모든 좌석 복원
         if (!processedBookingIds.isEmpty()) {
             Long concertId = selectedSeats.get(0).getConcert().getConcertId();
             refreshSeatCache(concertId);
-            restoreSeatsToReserved(seatsToRestore, userId);
-            log.info("미완성 예매 정리 및 좌석 복원 완료: cleanedBookings={}, restoredSeats={}",
-                    processedBookingIds, seatsToRestore.size());
+            restoreSeatsToReserved(selectedSeats, userId);
+            log.info("미완성 예매 정리 및 선택 좌석 복원 완료: cleanedBookings={}, restoredSeats={}",
+                    processedBookingIds, selectedSeats.size());
         }
     }
 
