@@ -70,7 +70,9 @@ public class BookingService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCERT_NOT_FOUND));
 
         // 2. 선택된 좌석 목록 및 총액 계산
-        List<ConcertSeat> selectedSeats = concertSeatRepository.findAllById(createDto.getConcertSeatIds()); // 예매 생성 요청 데이터이기 때문에 concertSeat가 여러개일 수 있다.
+        // 예매 생성 요청 데이터이기 때문에 concertSeat가 여러개일 수 있다.
+        List<ConcertSeat> selectedSeats = concertSeatRepository.findAllById(createDto.getConcertSeatIds());
+        // 만약에 예매 생성 요청 데이터에 있는 좌석 수와 실제로 불러온 좌석 수가 다르면 Exception 처리를 한다.
         if (selectedSeats.size() != createDto.getConcertSeatIds().size()) {
             throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
         }
@@ -96,25 +98,29 @@ public class BookingService {
      * 선택된 좌석들과 연관된 미완성 예매 데이터 정리
      */
     private void cleanupIncompleteBookingsForSeats(List<ConcertSeat> selectedSeats, Long userId) {
-        Set<Long> processedBookingIds = new HashSet<>();
+        Set<Long> processedBookingIds = new HashSet<>(); // 이미 처리한 Booking Id들
 
         // 1. 관련된 기존 예매들 정리
         for (ConcertSeat seat : selectedSeats) {
-            if (seat.getTicket() != null) {
-                Booking existingBooking = seat.getTicket().getBooking();
-
+            if (seat.getTicket() != null) { // ConcertSeat(좌석)에는 Ticket(예매 티켓)과 연결이 되어있다.
+                Booking existingBooking = seat.getTicket().getBooking(); // 예매 티켓은 Booking과 연결이 되어있다.
+                // Booking이 존재하지만, 결제 대기 상태인 경우...
                 if (existingBooking != null &&
                         existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT &&
                         !processedBookingIds.contains(existingBooking.getBookingId())) {
-
+                    // booking 내에 있는 여러 ticket들과 concertseat 관계를 해제한다.
+                    // booking 내에 있는 여러 ticket들의 좌석 상태가 RESERVED/BOOKED 상태인지, 사용자 권한 검증 되었는지 확인
+                    // 좌석 상태 Available로 변경 및 Redis 업데이트, TTL 키 삭제 그리고 이벤트 발행
+                    // Redis 좌석 상태가 해제(Available)된 상태이면 booking과 연결된 payment 삭제
+                    // booking 과 연계된 모든 Ticket들 삭제 -> db에서 booking 삭제
                     cleanupPendingBooking(existingBooking.getBookingId());
-                    processedBookingIds.add(existingBooking.getBookingId());
+                    processedBookingIds.add(existingBooking.getBookingId()); // 위에서 처리한 bookingid를 HashSet에 추가한다.
                 }
             }
         }
 
         // 2. 캐시 새로고침 및 선택된 모든 좌석 복원
-        if (!processedBookingIds.isEmpty()) {
+        if (!processedBookingIds.isEmpty()) { // 만약 처리한 booking들이 비어있지 않는다면..
             Long concertId = selectedSeats.get(0).getConcert().getConcertId();
             refreshSeatCache(concertId);
             restoreSeatsToReserved(selectedSeats, userId);
@@ -176,27 +182,30 @@ public class BookingService {
     @Transactional
     public void cleanupPendingBooking(Long bookingId) {
         try {
+            // bookingId로 booking 정보를 찾자
             Booking booking = bookingRepository.findById(bookingId).orElse(null);
-
+            // 못찾는다면 -> 정리 대상 예매가 존재하지 않는 것임
             if (booking == null) {
                 log.debug("정리 대상 예매가 존재하지 않음: bookingId={}", bookingId);
                 return;
             }
-
+            // 찾았으나, 결제 대기 상태가 아니라면 -> warn을 띄우고 끝냄
             if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
                 log.warn("PENDING 상태가 아닌 예매 정리 시도: bookingId={}, status={}",
                         bookingId, booking.getStatus());
                 return;
             }
-
-            Long concertId = booking.getConcert().getConcertId();
-            Long userId = booking.getUserId();
+            // 찾았고, 결제 대기 상태라면
+            Long concertId = booking.getConcert().getConcertId(); // 해당 예매의 콘서트 id를 불러서 저장함
+            Long userId = booking.getUserId(); // 해당 예매를 한 사용자의 아이디를 저장함
 
             // 1. ConcertSeat-Ticket 연관관계 해제
+            // 예매는 한번에 여러개의 티켓 점유가 가능하다. -> 예매된 여러개의 티켓과 콘서트 좌석 정보의 연관관계 해제
             booking.getTickets().forEach(ticket -> {
-                ConcertSeat concertSeat = ticket.getConcertSeat();
+                ConcertSeat concertSeat = ticket.getConcertSeat(); // 하나의 티켓에는 하나의 콘서트 좌석! 티켓에 할당된 콘서트 좌석 정보를 가져온다.
+                // 콘서트 좌석 정보가 존재하고, 콘서트 좌석 정보의 티켓이 현재 티켓과 동일하다면
                 if (concertSeat != null && concertSeat.getTicket() == ticket) {
-                    concertSeat.releaseTicket();
+                    concertSeat.releaseTicket(); // 콘서트 좌석 정보와 연결된 티켓 삭제
                     log.debug("ConcertSeat-Ticket 연관관계 해제: seatId={}",
                             concertSeat.getConcertSeatId());
                 }
@@ -204,8 +213,10 @@ public class BookingService {
 
             // 2. Redis 좌석 상태 해제
             booking.getTickets().forEach(ticket -> {
-                try {
+                try { //ConcertSeat -> ConcertSeatId 추출
                     Long seatId = ticket.getConcertSeat().getConcertSeatId();
+                    // 좌석 상태 해제 가능한지 (RESERVED/BOOKED 상태인지, 사용자 권한 검증 되었는지) 확인 후,
+                    // 좌석 상태 Available로 변경 및 Redis 업데이트, TTL 키 삭제 그리고 이벤트 발행
                     seatStatusService.releaseSeat(concertId, seatId, userId);
                 } catch (Exception e) {
                     log.warn("Redis 좌석 해제 실패: seatId={}",
@@ -213,14 +224,14 @@ public class BookingService {
                 }
             });
 
-            // 3. Payment 삭제
+            // 3. Redis 좌석 상태가 해제(Available)된 상태이다. -> booking과 연결된 Payment 삭제
             if (booking.getPayment() != null) {
                 paymentRepository.delete(booking.getPayment());
             }
 
             // 4. Booking 및 Ticket 삭제
-            booking.removeAllTickets(); // orphanRemoval로 Ticket 삭제
-            bookingRepository.delete(booking);
+            booking.removeAllTickets(); // booking과 연계된 모든 Ticket들을 삭제한다. 그리고 booking의 Tickets라는 리스트를 빈 리스트로 반환한다.
+            bookingRepository.delete(booking); // booking 이라는 정보를 데이터에서 삭제한다.
 
             log.info("PENDING 예매 완전 정리 완료: bookingId={}", bookingId);
 

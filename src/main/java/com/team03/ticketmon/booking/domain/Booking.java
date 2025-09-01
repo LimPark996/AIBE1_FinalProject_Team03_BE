@@ -176,11 +176,11 @@ public class Booking extends BaseTimeEntity {
 	 */
 	public void removeAllTickets() {
 		for (Ticket ticket : new ArrayList<>(tickets)) {
-			ticket.setBooking(null);
-			if (ticket.getConcertSeat() != null) {
-				ticket.getConcertSeat().releaseTicket();
+			ticket.setBooking(null); // booking과 엮인 모든 ticket들을 null로 처리한다.
+			if (ticket.getConcertSeat() != null) { // 만약 특정 ticket과 ConcertSeat이 여전히 연걸되어 있으면
+				ticket.getConcertSeat().releaseTicket(); // 해당 ticket과 ConcertSeat의 연결 관계를 끊는다.
 			}
 		}
-		tickets.clear();
+		tickets.clear(); // ticket들의 리스트를 비운다.
 	}
 }

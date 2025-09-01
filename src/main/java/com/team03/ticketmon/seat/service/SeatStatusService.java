@@ -314,31 +314,32 @@ public class SeatStatusService {
      * 좌석 선점 해제 (AVAILABLE로 변경)
      */
     public void releaseSeat(Long concertId, Long concertSeatId, Long userId) {
+        // 특정 콘서트의 특정 콘서트 좌석(사용자 상관없이) 상태 가져옴 -> Redis에서 가져오거나 없으면 DB에서 가져옴
         Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
-
+        // 만약 특정 콘서트의 특정 콘서트 좌석이 "존재하지 않는다면!"
         if (!currentStatus.isPresent()) {
             log.warn("존재하지 않는 좌석 해제 시도: concertId={}, concertSeatId={}, userId={}",
                     concertId, concertSeatId, userId);
             throw new SeatReservationException("존재하지 않는 좌석입니다.");
         }
-
+        // 만약 특정 콘서트의 특정 콘서트 좌석이 "존재한다면!" -> 좌석 상태 정보를 가져온다.
         SeatStatus currentSeat = currentStatus.get();
 
-        // 1. 좌석 상태가 RESERVED인지 확인
+        // 1. 좌석 상태가 RESERVED가 아니면서 BOOKED가 아니라면? -> 해제 불가능한 좌석 상태이다.
         if (!currentSeat.isReserved() && currentSeat.getStatus() != SeatStatus.SeatStatusEnum.BOOKED) {
             log.warn("해제 불가능한 좌석 상태: concertId={}, concertSeatId={}, userId={}, currentStatus={}",
                     concertId, concertSeatId, userId, currentSeat.getStatus());
             throw new SeatReservationException("해제할 수 없는 좌석 상태입니다. 현재 상태: " + currentSeat.getStatus());
         }
 
-        // 2. 해제 요청 사용자가 선점한 사용자와 일치하는지 확인
+        // 2. 좌석 상태가 RESERVED이거나 BOOKED이면? -> 해제 요청 사용자가 선점한 사용자와 일치하는지 확인 (권한 확인)
         if (!userId.equals(currentSeat.getUserId())) {
             log.warn("권한 없는 좌석 해제 시도: concertId={}, concertSeatId={}, requestUserId={}, reservedUserId={}",
                     concertId, concertSeatId, userId, currentSeat.getUserId());
             throw new SeatReservationException("다른 사용자가 선점한 좌석은 해제할 수 없습니다.");
         }
 
-        // 3. 검증 통과 시 좌석 해제 처리
+        // 3. 좌석 상태가 RESERVED이거나 BOOKED이면서 권한이 있다면? 좌석 상태를 AVAILABLE로 변경한다.
         SeatStatus updatedStatus = SeatStatus.builder()
                 .id(concertId + "-" + concertSeatId)
                 .concertId(concertId)
@@ -350,9 +351,10 @@ public class SeatStatusService {
                 .seatInfo(currentSeat.getSeatInfo())
                 .build();
 
+        // Redis에 갱신하고 이벤트 발행한다.
         updateSeatStatus(updatedStatus);
 
-        // 4. TTL 키 삭제 (불필요한 만료 이벤트 방지)
+        // 4. TTL 키 삭제 (불필요한 Redis 키 만료 이벤트 방지)
         removeSeatTTLKey(concertId, concertSeatId);
 
         log.info("좌석 선점 해제 완료: concertId={}, concertSeatId={}, userId={}", concertId, concertSeatId, userId);
