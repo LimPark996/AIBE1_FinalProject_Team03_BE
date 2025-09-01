@@ -102,7 +102,7 @@ public class SeatStatusService {
     }
 
     /**
-     * 좌석 상태 업데이트 (기본 버전)
+     * 개별 좌석 상태 업데이트
      * - Redis Hash에 좌석 상태 저장
      * - 실시간 이벤트 발행으로 다른 사용자들에게 변경사항 알림
      */
@@ -110,13 +110,13 @@ public class SeatStatusService {
         String key = SEAT_STATUS_KEY_PREFIX + seatStatus.getConcertId();
         RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
 
-        // 1. Redis에 좌석 상태 저장
+        // 1. Redis에 좌석 상태 저장 (좌석 상태가 Reserved로 변경되었기 때문, 만료 시간도 null로!)
         seatMap.put(seatStatus.getSeatId().toString(), seatStatus);
 
-        // 2. 마지막 업데이트 시간 갱신
+        // 2. 콘서트 상태의 마지막 업데이트 시간 갱신
         updateLastUpdateTime(seatStatus.getConcertId());
 
-        // 3. 실시간 이벤트 발행 (실패해도 좌석 상태 저장에는 영향 없음)
+        // 3. 실시간 이벤트 발행 -> 여러분 (화면을 보는 사람들) seatStatus 현황 공유드립니다 -> 화면 상에 현황 뜸
         try {
             eventPublisher.publishSeatUpdate(seatStatus);
         } catch (Exception e) {
@@ -126,6 +126,17 @@ public class SeatStatusService {
 
         log.info("좌석 상태 업데이트: concertId={}, seatId={}, status={}",
                 seatStatus.getConcertId(), seatStatus.getSeatId(), seatStatus.getStatus());
+    }
+
+    public void updateSeatStatusWithoutEvent(SeatStatus seatStatus) {
+        String key = SEAT_STATUS_KEY_PREFIX + seatStatus.getConcertId();
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+
+        // 1. Redis에 좌석 상태 저장 (좌석 상태가 Reserved로 변경되었기 때문, 만료 시간도 null로!)
+        seatMap.put(seatStatus.getSeatId().toString(), seatStatus);
+
+        // 2. 콘서트 상태의 마지막 업데이트 시간 갱신
+        updateLastUpdateTime(seatStatus.getConcertId());
     }
 
     /**

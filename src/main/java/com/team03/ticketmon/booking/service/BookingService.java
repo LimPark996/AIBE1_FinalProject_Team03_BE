@@ -60,7 +60,7 @@ public class BookingService {
     @Transactional
     public Booking createPendingBooking(BookingCreateRequest createDto, Long userId) {
 
-        // 0. 유저 정보 조회
+        // 0. 유저 정보 조회 (유저가 존재하냐, 안하냐)
         if (!userRepository.existsById(userId)) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
@@ -70,7 +70,7 @@ public class BookingService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONCERT_NOT_FOUND));
 
         // 2. 선택된 좌석 목록 및 총액 계산
-        List<ConcertSeat> selectedSeats = concertSeatRepository.findAllById(createDto.getConcertSeatIds());
+        List<ConcertSeat> selectedSeats = concertSeatRepository.findAllById(createDto.getConcertSeatIds()); // 예매 생성 요청 데이터이기 때문에 concertSeat가 여러개일 수 있다.
         if (selectedSeats.size() != createDto.getConcertSeatIds().size()) {
             throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
         }

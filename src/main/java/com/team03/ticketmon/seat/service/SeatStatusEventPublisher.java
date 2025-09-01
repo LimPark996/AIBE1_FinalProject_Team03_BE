@@ -72,7 +72,7 @@ public class SeatStatusEventPublisher {
     }
 
     /**
-     * 좌석 상태 변경 이벤트 발행 (개별 필드 기반) - 개선된 버전
+     * 좌석 상태 변경 이벤트 발행 (개별 필드 기반)
      *
      * @param concertId 콘서트 ID
      * @param concertSeatId 좌석 ID
@@ -83,7 +83,7 @@ public class SeatStatusEventPublisher {
     public void publishSeatUpdate(Long concertId, Long concertSeatId, SeatStatusEnum status,
                                   Long userId, String seatInfo) {
 
-        // ✅ 개선: 입력 유효성 검증
+        // 입력 유효성 검증
         if (!isValidEventParameters(concertId, concertSeatId, status, seatInfo)) {
             failedEventCount.incrementAndGet();
             return;
@@ -115,7 +115,7 @@ public class SeatStatusEventPublisher {
             String channelName = SEAT_CHANNEL_PREFIX + event.concertId();
             RTopic topic = redissonClient.getTopic(channelName);
 
-            // ✅ 개선: JSON 직렬화 예외 처리 강화
+            // JSON 직렬화 예외 처리 강화
             String eventJson;
             try {
                 eventJson = objectMapper.writeValueAsString(event);
@@ -125,7 +125,7 @@ public class SeatStatusEventPublisher {
                 return;
             }
 
-            // ✅ 개선: 빈 JSON 검증
+            // 빈 JSON 검증
             if (eventJson == null || eventJson.trim().isEmpty()) {
                 failedEventCount.incrementAndGet();
                 log.error("직렬화된 JSON이 비어있습니다: event={}", event);
@@ -139,7 +139,7 @@ public class SeatStatusEventPublisher {
             log.info("좌석 상태 이벤트 발행 완료: channel={}, concertId={}, seatId={}, status={}, listeners={}",
                     channelName, event.concertId(), event.seatId(), event.status(), listenerCount);
 
-            // ✅ 개선: 리스너가 없는 경우 경고
+            // 리스너가 없는 경우 경고
             if (listenerCount == 0) {
                 log.warn("이벤트를 수신하는 리스너가 없습니다: channel={}, concertId={}",
                         channelName, event.concertId());

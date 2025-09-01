@@ -67,6 +67,7 @@ public class BookingController {
             BulkSeatLockResultDTO lockResult = seatLockService.lockAllUserSeatsPermanently(
                     createRequest.getConcertId(), user.getUserId());
 
+            // 영구 선점에 하나라도 실패한다면?!
             if (!lockResult.isAllSuccess()) {
                 log.warn("좌석 영구 선점 실패: {}", lockResult.getErrorMessage());
                 return ResponseEntity.badRequest().body(

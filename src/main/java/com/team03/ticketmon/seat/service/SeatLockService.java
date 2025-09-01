@@ -64,6 +64,7 @@ public class SeatLockService {
      * 3. TTL 키 삭제 (자동 만료 방지)
      * 4. 좌석 상태를 PERMANENTLY_RESERVED로 변경
      * 5. 실시간 이벤트 발행
+     * 6. SeatLockResultDTO 생성
      *
      * @param concertId 콘서트 ID
      * @param concertSeatId 좌석 ID
@@ -80,14 +81,17 @@ public class SeatLockService {
             // 1. concertSeatId라는 현재 좌석 상태 조회 및 검증 (Reserved 상태인가 & 만료하지 않았는가 & 대상자가 일치하는가)
             SeatStatus currentSeat = validateSeatForLocking(concertId, concertSeatId, userId);
 
-            // 2. TTL 키 삭제 (자동 만료 방지)
+            // 2. TTL 키 삭제 (자동 만료 방지) -> 삭제 성공 (Yes or No)
             boolean ttlRemoved = removeSeatTTLKey(concertId, concertSeatId);
 
-            // 3. 좌석 상태를 영구 선점으로 변경
+            // 3. 좌석 상태를 영구 선점으로 변경 -> userId의 seatId에 대한 좌석 상태는 Reserved이며 TTL 만료는 null 값
             SeatStatus permanentlyLockedSeat = createPermanentlyLockedSeat(currentSeat);
-            seatStatusService.updateSeatStatus(permanentlyLockedSeat);
+
+            // redis에서 저장된 정보를 업그레이드함 (Reserved Yes, Expired Null, 업데이트 시간 갱신)
+            seatStatusService.updateSeatStatusWithoutEvent(permanentlyLockedSeat);
 
             // 4. 실시간 이벤트 발행 (다른 사용자들에게 알림)
+            // 좌석 상태 발행 -> 여러분 현재 화면 현황은 요렇구요, 영구 선점된 좌석들도 확인할 수 있어요!
             publishLockEvent(permanentlyLockedSeat);
 
             LocalDateTime lockEndTime = LocalDateTime.now();
@@ -96,14 +100,17 @@ public class SeatLockService {
                     .concertId(concertId)
                     .concertSeatId(concertSeatId)
                     .userId(userId)
-                    .lockStartTime(lockStartTime)
-                    .lockEndTime(lockEndTime)
-                    .previousStatus(currentSeat.getStatus())
-                    .newStatus(permanentlyLockedSeat.getStatus())
-                    .ttlKeyRemoved(ttlRemoved)
+                    .lockStartTime(lockStartTime) //영구선점 시작 타임
+                    .lockEndTime(lockEndTime) // 영구선점 끝 타임
+                    .previousStatus(currentSeat.getStatus()) // 영구선점 이전 상태
+                    .newStatus(permanentlyLockedSeat.getStatus()) // 영구선점 이후 상태(아마 Reserved)
+                    .ttlKeyRemoved(ttlRemoved) // TTL 삭제 성공 유무 (이미 만료되어 자동 삭제된 경우: false, 삭제한 경우: true)
                     .seatInfo(currentSeat.getSeatInfo())
                     .success(true)
                     .build();
+            // previousStatus, newStatus의 상태 값 자체는 Reserved로 동일하지만, 내부 속성이 다릅니다:
+            //이전 상태: expiresAt = 2025-09-01 15:30:00 (5분 후 만료 예정)
+            //새로운 상태: expiresAt = null (만료 시간 없음 = 영구)
 
             log.info("좌석 영구 선점 완료: {}", result.getSummary());
             return result;
@@ -158,28 +165,29 @@ public class SeatLockService {
         LocalDateTime restoreStartTime = LocalDateTime.now();
 
         try {
-            // 1. 현재 좌석 상태 검증
+            // 1. 현재 좌석 상태 검증 (개별 좌석 상태 조회 (user 상관 없음))
             Optional<SeatStatus> currentStatus = seatStatusService.getSeatStatus(concertId, concertSeatId);
 
             if (currentStatus.isEmpty()) {
                 throw new SeatReservationException("존재하지 않는 좌석입니다.");
             }
 
+            // 특정 좌석이 존재하는 경우
             SeatStatus currentSeat = currentStatus.get();
 
-            // 2. 권한 검증
+            // 2. 권한 검증 (복원 요청자가 좌석을 선점한 사람이 맞는지 확인)
             if (!userId.equals(currentSeat.getUserId())) {
                 throw new SeatReservationException("다른 사용자의 좌석은 복원할 수 없습니다.");
             }
 
-            // 3. 현재 상태가 영구 선점인지 확인 (BOOKED 상태는 복원 불가)
+            // 3. 현재 상태가 영구 선점(RESERVED)인지 확인 (BOOKED 상태는 복원 불가)
             if (currentSeat.getStatus() == SeatStatusEnum.BOOKED) {
                 throw new SeatReservationException("이미 예매 완료된 좌석은 복원할 수 없습니다.");
             }
 
-            // 4. 일반 선점 상태로 복원
+            // 4. 일반 선점 상태로 복원 (좌석 하나에 대해)
             SeatStatus restoredSeat = createRestoredReservation(currentSeat, restoreWithTTL);
-            seatStatusService.updateSeatStatus(restoredSeat);
+            seatStatusService.updateSeatStatus(restoredSeat); // Redis Hash에 좌석 상태 저장, 실시간 이벤트 발행으로 다른 사용자들에게 변경사항 알림
 
             // 5. TTL 키 재생성 (옵션)
             if (restoreWithTTL) {
@@ -192,10 +200,10 @@ public class SeatLockService {
                     .concertId(concertId)
                     .concertSeatId(concertSeatId)
                     .userId(userId)
-                    .lockStartTime(restoreStartTime)
-                    .lockEndTime(restoreEndTime)
-                    .previousStatus(currentSeat.getStatus())
-                    .newStatus(restoredSeat.getStatus())
+                    .lockStartTime(restoreStartTime) // 복원 시작 타임
+                    .lockEndTime(restoreEndTime) // 복원 끝 타임
+                    .previousStatus(currentSeat.getStatus()) // 이전 상태 (RESERVED)
+                    .newStatus(restoredSeat.getStatus()) // 복구 이후 상태 (RESERVED)
                     .ttlKeyRemoved(false) // 복원 시에는 TTL 키 생성
                     .seatInfo(currentSeat.getSeatInfo())
                     .success(true)
@@ -246,7 +254,7 @@ public class SeatLockService {
 
         LocalDateTime bulkStartTime = LocalDateTime.now();
 
-        // 🔧 보상 트랜잭션을 위한 성공한 좌석 추적
+        // 보상 트랜잭션을 위한 영구 선점에 성공한 좌석 추적
         List<Long> successfulSeatIds = new ArrayList<>();
 
         try {
@@ -271,22 +279,28 @@ public class SeatLockService {
                 log.debug("좌석 영구 선점 처리 중: concertId={}, seatId={}, userId={}",
                         concertId, seat.getSeatId(), userId);
 
+                // * 1. 현재 좌석 상태 검증 (RESERVED 상태 확인)
+                // * 2. 권한 검증 (선점한 사용자와 요청 사용자 일치)
+                // * 3. TTL 키 삭제 (자동 만료 방지)
+                // * 4. 좌석 상태를 PERMANENTLY_RESERVED로 변경
+                // * 5. 실시간 이벤트 발행
+                // * 6. SeatLockResultDTO 생성
                 SeatLockResultDTO result = lockSeatPermanently(concertId, seat.getSeatId(), userId);
-                seatResults.add(result);
+                seatResults.add(result); // 영구 선점 성공한 좌석들
 
                 if (result.isSuccess()) {
-                    // 🔧 성공한 좌석 ID 추적
+                    // 영구 선점에 성공한 좌석 ID 추적
                     successfulSeatIds.add(seat.getSeatId());
                     log.debug("좌석 영구 선점 성공: seatId={}", seat.getSeatId());
                 } else {
-                    // 🔧 실패 시 즉시 보상 트랜잭션 실행
+                    // 영구 선점에 실패 시 즉시 보상 트랜잭션 실행
                     log.warn("좌석 영구 선점 실패 감지: seatId={}, error={}",
                             seat.getSeatId(), result.getErrorMessage());
 
-                    // 지금까지 성공한 좌석들을 원래 상태로 복원
+                    // 지금까지 영구 선점에 성공한 좌석들을 원래 상태로 복원
                     executeCompensation(concertId, userId, successfulSeatIds);
 
-                    // 전체 실패로 처리
+                    // 전체 실패로 처리 (보상 트랜잭션은 성공했지만, 결과적으로 영구 선점은 실패했기에)
                     LocalDateTime bulkEndTime = LocalDateTime.now();
                     return BulkSeatLockResultDTO.builder()
                             .concertId(concertId)
@@ -306,11 +320,11 @@ public class SeatLockService {
                 }
             }
 
-            // 3. 모든 좌석 처리 성공 시 결과 집계 및 반환
+            // 3. 영구 선점 처리 성공 시 성공한 좌석들의 결과 집계 및 반환
             LocalDateTime bulkEndTime = LocalDateTime.now();
             BulkSeatLockResultDTO bulkResult = BulkSeatLockResultDTO.allSuccess(
                     concertId, userId, seatResults,
-                    BulkSeatLockResultDTO.BulkOperationType.LOCK,
+                    BulkSeatLockResultDTO.BulkOperationType.LOCK, //LOCK 상태로 처리
                     bulkStartTime, bulkEndTime
             );
 
@@ -321,7 +335,7 @@ public class SeatLockService {
             log.error("사용자 모든 좌석 일괄 영구 선점 중 예외 발생: concertId={}, userId={}",
                     concertId, userId, e);
 
-            // 🔧 예외 발생 시에도 보상 트랜잭션 실행
+            // 예외 발생 시에도 보상 트랜잭션 실행
             executeCompensation(concertId, userId, successfulSeatIds);
 
             return BulkSeatLockResultDTO.failure(concertId, userId,
@@ -331,7 +345,7 @@ public class SeatLockService {
     }
 
     /**
-     * 🔧 보상 트랜잭션 실행 메서드 (신규 추가)
+     * 보상 트랜잭션 실행 메서드
      *
      * 성공한 좌석들을 원래 상태(임시 선점)로 복원합니다.
      * 기존 restoreSeatReservation 메서드를 활용하여 구현합니다.
@@ -346,6 +360,7 @@ public class SeatLockService {
             return;
         }
 
+        // 복원할 좌석이 있는 경우
         log.warn("보상 트랜잭션 시작: 성공한 좌석 {}개를 원래 상태로 복원 (concertId={}, userId={}, seatIds={})",
                 successfulSeatIds.size(), concertId, userId, successfulSeatIds);
 
@@ -355,27 +370,31 @@ public class SeatLockService {
         // 각 성공한 좌석을 원래 상태로 복원
         for (Long seatId : successfulSeatIds) {
             try {
-                // 🔧 기존 restoreSeatReservation 메서드 활용
+                // 기존 restoreSeatReservation 메서드 활용
                 // restoreWithTTL=true로 설정하여 5분 TTL 재설정
                 SeatLockResultDTO restoreResult = restoreSeatReservation(concertId, seatId, userId, true);
 
+                // 특정 좌석 복구를 성공한 경우,
                 if (restoreResult.isSuccess()) {
                     restoredCount++;
                     log.debug("보상 트랜잭션: 좌석 복원 성공 seatId={}", seatId);
+                // 특정 좌석 복구를 실패한 경우,
                 } else {
                     compensationFailures++;
                     log.error("보상 트랜잭션: 좌석 복원 실패 seatId={}, error={}",
                             seatId, restoreResult.getErrorMessage());
                 }
+            // 특정 좌석 복구를 실패한 경우,
             } catch (Exception e) {
                 compensationFailures++;
                 log.error("보상 트랜잭션: 좌석 복원 중 예외 seatId={}", seatId, e);
             }
         }
-
+        // 보상 트랜잭션은 완료했으나, 모든 좌석 복원이 성공한게 아니다!
         if (compensationFailures > 0) {
             log.error("보상 트랜잭션 완료: 복원 성공 {}개, 복원 실패 {}개 - 관리자 확인 필요!",
                     restoredCount, compensationFailures);
+        // 보상 트랜잭션이 완료하고 모든 좌석 복원 성공했다!
         } else {
             log.info("보상 트랜잭션 완료: 모든 좌석 복원 성공 ({}개)", restoredCount);
         }
@@ -653,7 +672,7 @@ public class SeatLockService {
                 log.debug("TTL 키가 존재하지 않거나 이미 만료됨: key={}", ttlKey);
             }
 
-            return deleted;
+            return deleted; // TTL 키 삭제 성공 - Yes or No
 
         } catch (Exception e) {
             log.error("TTL 키 삭제 실패: concertId={}, concertSeatId={}", concertId, concertSeatId, e);
@@ -662,7 +681,7 @@ public class SeatLockService {
     }
 
     /**
-     * TTL 키 생성 (복원 시 사용)
+     * TTL 키 생성 (복원 시 사용) -> 영구 선점 시, redisson에서 deleted 되었음 -> 다시 생성
      */
     private void createSeatTTLKey(Long concertId, Long concertSeatId) {
         try {
@@ -680,7 +699,7 @@ public class SeatLockService {
     }
 
     /**
-     * 영구 선점 좌석 상태 생성
+     * 영구 선점 좌석 상태 생성 -> UserId가 선점한 SeatId에 대한 SeatStatus가 RESERVED 그리고 만료 시간 제거
      */
     private SeatStatus createPermanentlyLockedSeat(SeatStatus currentSeat) {
         return SeatStatus.builder()
@@ -696,20 +715,20 @@ public class SeatLockService {
     }
 
     /**
-     * 복원된 선점 좌석 상태 생성
+     * 복원된 선점 좌석 상태 생성 (좌석 하나임)
      */
     private SeatStatus createRestoredReservation(SeatStatus currentSeat, boolean withTTL) {
         LocalDateTime expiresAt = withTTL ?
-                LocalDateTime.now().plusMinutes(5) : null;
+                LocalDateTime.now().plusMinutes(5) : null; // withTTL이 True이면 현재 시간에 +5분 설정
 
         return SeatStatus.builder()
                 .id(currentSeat.getId())
                 .concertId(currentSeat.getConcertId())
                 .seatId(currentSeat.getSeatId())
-                .status(SeatStatusEnum.RESERVED)
+                .status(SeatStatusEnum.RESERVED) // RESERVED 상태로 복원
                 .userId(currentSeat.getUserId())
                 .reservedAt(currentSeat.getReservedAt())
-                .expiresAt(expiresAt)
+                .expiresAt(expiresAt) // 만료 시간 등록
                 .seatInfo(currentSeat.getSeatInfo())
                 .build();
     }
