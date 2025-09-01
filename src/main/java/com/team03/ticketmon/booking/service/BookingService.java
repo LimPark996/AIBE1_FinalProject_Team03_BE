@@ -10,7 +10,10 @@ import com.team03.ticketmon.concert.domain.Concert;
 import com.team03.ticketmon.concert.domain.ConcertSeat;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
+import com.team03.ticketmon.payment.domain.enums.PaymentStatus;
+import com.team03.ticketmon.payment.repository.PaymentRepository;
 import com.team03.ticketmon.seat.exception.SeatReservationException;
+import com.team03.ticketmon.seat.service.SeatCacheInitService;
 import com.team03.ticketmon.seat.service.SeatStatusService;
 import com.team03.ticketmon.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -23,8 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 
 /**
@@ -42,6 +45,8 @@ public class BookingService {
     private final ConcertSeatRepository concertSeatRepository;
     private final SeatStatusService seatStatusService;
     private final EntityManager entityManager;
+    private final SeatCacheInitService seatCacheInitService;
+    private final PaymentRepository paymentRepository;
 
     /**
      * '결제 대기' 상태의 새로운 예매를 생성
@@ -70,6 +75,8 @@ public class BookingService {
             throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
         }
 
+        cleanupIncompleteBookingsForSeats(selectedSeats, userId);
+
         // 2-1. ✅ 수정: concertSeatId 사용으로 매개변수명 일관성 확보
         selectedSeats.forEach(seat ->
                 validateSeatReservation(seat.getConcert().getConcertId(), seat.getConcertSeatId(), userId)
@@ -83,6 +90,143 @@ public class BookingService {
         log.info("결제 대기 상태의 예매 생성 완료. Booking ID: {}", savedBooking.getBookingId());
 
         return savedBooking;
+    }
+
+    /**
+     * 선택된 좌석들과 연관된 미완성 예매 데이터 정리
+     */
+    private void cleanupIncompleteBookingsForSeats(List<ConcertSeat> selectedSeats, Long userId) {
+        Set<Long> processedBookingIds = new HashSet<>();
+
+        // 1. 관련된 기존 예매들 정리
+        for (ConcertSeat seat : selectedSeats) {
+            if (seat.getTicket() != null) {
+                Booking existingBooking = seat.getTicket().getBooking();
+
+                if (existingBooking != null &&
+                        existingBooking.getStatus() == BookingStatus.PENDING_PAYMENT &&
+                        !processedBookingIds.contains(existingBooking.getBookingId())) {
+
+                    cleanupPendingBooking(existingBooking.getBookingId());
+                    processedBookingIds.add(existingBooking.getBookingId());
+                }
+            }
+        }
+
+        // 2. 캐시 새로고침 및 선택된 모든 좌석 복원
+        if (!processedBookingIds.isEmpty()) {
+            Long concertId = selectedSeats.get(0).getConcert().getConcertId();
+            refreshSeatCache(concertId);
+            restoreSeatsToReserved(selectedSeats, userId);
+            log.info("미완성 예매 정리 및 선택 좌석 복원 완료: cleanedBookings={}, restoredSeats={}",
+                    processedBookingIds, selectedSeats.size());
+        }
+    }
+
+    /**
+     * 좌석들을 RESERVED 상태로 복원 (기존 reserveSeat 메서드 재사용)
+     */
+    private void restoreSeatsToReserved(List<ConcertSeat> seatsToRestore, Long userId) {
+        log.info("복원 대상 좌석 목록: {}",
+                seatsToRestore.stream()
+                        .map(seat -> seat.getConcertSeatId())
+                        .collect(Collectors.toList()));
+
+        for (ConcertSeat seat : seatsToRestore) {
+            log.info("좌석 복원 시작: seatId={}", seat.getConcertSeatId());
+            try {
+                Long concertId = seat.getConcert().getConcertId();
+                Long concertSeatId = seat.getConcertSeatId();
+                String seatInfo = seat.getSeatInfo();
+
+                // 기존 reserveSeat 메서드 재사용 - AVAILABLE -> RESERVED 처리
+                seatStatusService.reserveSeat(concertId, concertSeatId, userId, seatInfo);
+
+                log.info("좌석 RESERVED 상태로 복원: concertId={}, concertSeatId={}, userId={}",
+                        concertId, concertSeatId, userId);
+
+            } catch (Exception e) {
+                log.error("좌석 복원 실패: seatId={}, userId={}",
+                        seat.getConcertSeatId(), userId, e);
+            }
+        }
+    }
+
+    /**
+     * 좌석 캐시 새로고침
+     */
+    private void refreshSeatCache(Long concertId) {
+        try {
+            // 기존 캐시 삭제
+            seatCacheInitService.clearSeatCache(concertId);
+
+            // DB 기반 캐시 재초기화
+            seatCacheInitService.initializeSeatCacheFromDB(concertId);
+
+            log.info("좌석 캐시 새로고침 완료: concertId={}", concertId);
+        } catch (Exception e) {
+            log.error("좌석 캐시 새로고침 실패: concertId={}", concertId, e);
+            // 캐시 실패는 예매 진행에 치명적이지 않으므로 예외를 던지지 않음
+        }
+    }
+
+    /**
+     * PENDING 상태 예매 완전 정리
+     */
+    @Transactional
+    public void cleanupPendingBooking(Long bookingId) {
+        try {
+            Booking booking = bookingRepository.findById(bookingId).orElse(null);
+
+            if (booking == null) {
+                log.debug("정리 대상 예매가 존재하지 않음: bookingId={}", bookingId);
+                return;
+            }
+
+            if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+                log.warn("PENDING 상태가 아닌 예매 정리 시도: bookingId={}, status={}",
+                        bookingId, booking.getStatus());
+                return;
+            }
+
+            Long concertId = booking.getConcert().getConcertId();
+            Long userId = booking.getUserId();
+
+            // 1. ConcertSeat-Ticket 연관관계 해제
+            booking.getTickets().forEach(ticket -> {
+                ConcertSeat concertSeat = ticket.getConcertSeat();
+                if (concertSeat != null && concertSeat.getTicket() == ticket) {
+                    concertSeat.releaseTicket();
+                    log.debug("ConcertSeat-Ticket 연관관계 해제: seatId={}",
+                            concertSeat.getConcertSeatId());
+                }
+            });
+
+            // 2. Redis 좌석 상태 해제
+            booking.getTickets().forEach(ticket -> {
+                try {
+                    Long seatId = ticket.getConcertSeat().getConcertSeatId();
+                    seatStatusService.releaseSeat(concertId, seatId, userId);
+                } catch (Exception e) {
+                    log.warn("Redis 좌석 해제 실패: seatId={}",
+                            ticket.getConcertSeat().getConcertSeatId(), e);
+                }
+            });
+
+            // 3. Payment 삭제
+            if (booking.getPayment() != null) {
+                paymentRepository.delete(booking.getPayment());
+            }
+
+            // 4. Booking 및 Ticket 삭제
+            booking.removeAllTickets(); // orphanRemoval로 Ticket 삭제
+            bookingRepository.delete(booking);
+
+            log.info("PENDING 예매 완전 정리 완료: bookingId={}", bookingId);
+
+        } catch (Exception e) {
+            log.error("PENDING 예매 정리 중 오류: bookingId={}", bookingId, e);
+        }
     }
 
     @Transactional
@@ -121,6 +265,11 @@ public class BookingService {
             try {
                 Long seatId = ticket.getConcertSeat().getConcertSeatId();
                 seatStatusService.releaseSeat(concertId, seatId, booking.getUserId());
+                ConcertSeat concertSeat = ticket.getConcertSeat();
+                if (concertSeat != null) {
+                    concertSeat.releaseTicket(); // ConcertSeat의 ticket 필드를 null로 설정
+                    ticket.releaseConcertSeat();  // Ticket의 concertSeat 필드를 null로 설정
+                }
             } catch (SeatReservationException e) {
                 log.warn("[Cancel] 좌석 해제 스킵: seatId={}, 이유={}",
                         ticket.getConcertSeat().getConcertSeatId(),
@@ -134,6 +283,8 @@ public class BookingService {
 
         // 히스토리 테이블로 이관하는 로직 호출
         archiveBookingAndTickets(booking);
+
+        booking.removeAllTickets();
 
         bookingRepository.save(booking);
         log.info("finalizeCancellationById 완료: bookingId={}", bookingId);

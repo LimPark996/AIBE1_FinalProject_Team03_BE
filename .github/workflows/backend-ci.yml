@@ -100,21 +100,3 @@ jobs:
 
         # Upload Test Report 단계 제거: 테스트를 수행하지 않으므로 테스트 보고서를 업로드할 필요 없음
         # 만약 나중에 테스트를 다시 포함할 경우 이 단계를 다시 추가
-
-      - name: Discord Message Notify # Discord 알림 추가
-        if: always() # 빌드 성공, 실패, 취소와 상관없이 항상 실행
-        uses: appleboy/discord-action@v1.2.0 # Discord 알림 액션 사용
-        with:
-          # 기존 webhook_id와 webhook_token 대신 webhook_url 사용
-          webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }} # Discord 웹훅 URL (Secrets에서 가져옴)
-          username: 'GitHub Actions CI Bot' # Discord에 표시될 봇 이름
-          avatar_url: 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png' # 봇 아바타 URL
-          message: |  # Discord에 보낼 메시지 내용
-            **Backend CI Pipeline Status**
-            Repository: `${{ github.repository }}`
-            Branch: `${{ github.ref_name }}`
-            Commit: `${{ github.sha }}`
-            Status: `${{ job.status }}`
-            <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow Run>
-          # 색상 설정 (선택 사항, job.status에 따라 변경 가능)
-          # color: ${{ job.status == 'success' && '#00FF00' || job.status == 'failure' && '#FF0000' || '#FFFF00' }}

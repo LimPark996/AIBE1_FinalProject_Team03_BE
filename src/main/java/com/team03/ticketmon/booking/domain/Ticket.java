@@ -74,4 +74,10 @@ public class Ticket extends BaseTimeEntity {
 		this.concertSeat = concertSeat;
 	}
 
+	/**
+	 * ConcertSeat과의 연관관계를 완전히 해제하는 메서드
+	 */
+	public void releaseConcertSeat() {
+		this.concertSeat = null;
+	}
 }

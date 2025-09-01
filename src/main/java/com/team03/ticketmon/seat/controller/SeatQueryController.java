@@ -3,10 +3,14 @@ package com.team03.ticketmon.seat.controller;
 import com.team03.ticketmon._global.exception.SuccessResponse;
 import com.team03.ticketmon.auth.jwt.CustomUserDetails;
 import com.team03.ticketmon.seat.domain.SeatStatus;
+import com.team03.ticketmon.seat.dto.SeatPriceResponse;
 import com.team03.ticketmon.seat.dto.SeatStatusResponseDTO;
+import com.team03.ticketmon.seat.service.SeatPriceService;
 import com.team03.ticketmon.seat.service.SeatStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +37,7 @@ import java.util.stream.Collectors;
 public class SeatQueryController {
 
     private final SeatStatusService seatStatusService;
+    private final SeatPriceService seatPriceService;
 
     @Operation(summary = "콘서트 전체 좌석 상태 조회", description = "특정 콘서트의 모든 좌석 상태를 조회합니다")
     @GetMapping("/concerts/{concertId}/status")
@@ -119,6 +124,66 @@ public class SeatQueryController {
             log.error("사용자 선점 좌석 조회 중 오류: concertId={}, userId={}", concertId, userId, e);
             return ResponseEntity.status(500)
                     .body(SuccessResponse.of("사용자 선점 좌석 조회 중 오류가 발생했습니다.", null));
+        }
+    }
+    @Operation(summary = "콘서트 전체 좌석 가격 조회", description = "특정 콘서트의 모든 좌석 가격 정보를 반환합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않는 콘서트"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @GetMapping("/concerts/{concertId}/prices")
+    public ResponseEntity<SuccessResponse<List<SeatPriceResponse>>> getConcertSeatPrices(
+            @Parameter(description = "콘서트 ID", required = true)
+            @PathVariable Long concertId) {
+
+        log.info("콘서트 좌석 가격 정보 조회 요청: concertId={}", concertId);
+
+        try {
+            List<SeatPriceResponse> seatPrices = seatPriceService.getConcertSeatPrices(concertId);
+
+            log.info("콘서트 좌석 가격 조회 성공: concertId={}, seatCount={}", concertId, seatPrices.size());
+            return ResponseEntity.ok(SuccessResponse.of("좌석 가격 정보 조회가 완료되었습니다.", seatPrices));
+
+        } catch (Exception e) {
+            log.error("콘서트 좌석 가격 조회 중 오류 발생: concertId={}", concertId, e);
+            return ResponseEntity.status(500)
+                    .body(SuccessResponse.of("좌석 가격 조회 중 오류가 발생했습니다.", null));
+        }
+    }
+
+    @Operation(summary = "선택된 좌석 가격 조회", description = "선택된 좌석들의 가격 정보를 반환합니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "조회 성공"),
+            @ApiResponse(responseCode = "400", description = "잘못된 요청 (좌석 ID 누락 등)"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않는 콘서트 또는 좌석"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @GetMapping("/concerts/{concertId}/prices/selected")
+    public ResponseEntity<SuccessResponse<List<SeatPriceResponse>>> getSelectedSeatPrices(
+            @Parameter(description = "콘서트 ID", required = true)
+            @PathVariable Long concertId,
+            @Parameter(description = "좌석 ID 목록", required = true)
+            @RequestParam List<Long> seatIds) {
+
+        log.info("선택된 좌석 가격 정보 조회 요청: concertId={}, seatIds={}", concertId, seatIds);
+
+        if (seatIds == null || seatIds.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(SuccessResponse.of("좌석 ID 목록이 비어있습니다.", null));
+        }
+
+        try {
+            List<SeatPriceResponse> seatPrices = seatPriceService.getSelectedSeatPrices(concertId, seatIds);
+
+            log.info("선택된 좌석 가격 조회 성공: concertId={}, requestedSeats={}, foundSeats={}",
+                    concertId, seatIds.size(), seatPrices.size());
+            return ResponseEntity.ok(SuccessResponse.of("선택된 좌석 가격 정보 조회가 완료되었습니다.", seatPrices));
+
+        } catch (Exception e) {
+            log.error("선택된 좌석 가격 조회 중 오류 발생: concertId={}, seatIds={}", concertId, seatIds, e);
+            return ResponseEntity.status(500)
+                    .body(SuccessResponse.of("좌석 가격 조회 중 오류가 발생했습니다.", null));
         }
     }
 }
