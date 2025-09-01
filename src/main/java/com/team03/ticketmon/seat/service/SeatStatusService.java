@@ -49,7 +49,7 @@ public class SeatStatusService {
     private static final String SEAT_LAST_UPDATE_KEY_PREFIX = RedisKeyGenerator.SEAT_LAST_UPDATE_KEY_PREFIX;
 
     /**
-     * ✅ 수정된 전체 좌석 상태 조회 - Cache-Aside 패턴 적용
+     * 수정된 전체 좌석 상태 조회 - Cache-Aside 패턴 적용
      */
     public Map<Long, SeatStatus> getAllSeatStatus(Long concertId) {
         String key = SEAT_STATUS_KEY_PREFIX + concertId;
@@ -57,18 +57,19 @@ public class SeatStatusService {
 
         Map<String, SeatStatus> rawMap = seatMap.readAllMap();
 
-        // ✅ Cache Miss 시 자동 초기화
+        // Cache Miss 시 자동 초기화
         if (rawMap.isEmpty()) {
             log.info("좌석 캐시가 비어있음. 자동 초기화 시작: concertId={}", concertId);
             try {
                 seatCacheInitService.initializeSeatCacheFromDB(concertId);
-                rawMap = seatMap.readAllMap(); // 재조회
+                rawMap = seatMap.readAllMap(); // 좌석 캐시 재조회
                 log.info("좌석 캐시 자동 초기화 완료: concertId={}, 좌석수={}", concertId, rawMap.size());
             } catch (Exception e) {
                 log.error("좌석 캐시 자동 초기화 실패: concertId={}", concertId, e);
             }
         }
 
+        // Cache Miss가 아닌 경우, rawMap의 형태를 Map<Long, SeatStatus>로 변환하여 반환
         return rawMap.entrySet().stream()
                 .collect(Collectors.toMap(
                         entry -> Long.valueOf(entry.getKey()),
@@ -77,7 +78,7 @@ public class SeatStatusService {
     }
 
     /**
-     * ✅ 수정된 개별 좌석 상태 조회 - Cache-Aside 패턴 적용
+     * 개별 좌석 상태 조회 (user 상관 없음)
      */
     public Optional<SeatStatus> getSeatStatus(Long concertId, Long concertSeatId) {
         String key = SEAT_STATUS_KEY_PREFIX + concertId;
@@ -85,17 +86,18 @@ public class SeatStatusService {
 
         SeatStatus status = seatMap.get(concertSeatId.toString());
 
-        // ✅ 캐시에 없고 전체 캐시도 비어있으면 초기화 시도
+        // 캐시에 없고 전체 캐시도 비어있으면 초기화 시도
         if (status == null && seatMap.size() == 0) {
             log.info("개별 좌석 조회 시 캐시 비어있음. 초기화 시도: concertId={}, concertSeatId={}", concertId, concertSeatId);
             try {
                 seatCacheInitService.initializeSeatCacheFromDB(concertId);
-                status = seatMap.get(concertSeatId.toString()); // 재조회
+                status = seatMap.get(concertSeatId.toString()); // 초기화 완료
             } catch (Exception e) {
                 log.error("개별 좌석 조회 시 캐시 초기화 실패: concertId={}, concertSeatId={}", concertId, concertSeatId, e);
             }
         }
 
+        // 캐시에 있으면 or 초기화하면 해당 concertSeatId 좌석 상태 정보 반환
         return Optional.ofNullable(status);
     }
 
@@ -163,7 +165,7 @@ public class SeatStatusService {
     }
 
     /**
-     * ✅ 사용자별 좌석 선점 개수 검증
+     * 사용자별 좌석 선점 개수 검증
      * Redis에서 현재 사용자가 선점한 좌석 개수를 확인하여 최대 제한을 초과하는지 검증
      *
      * @param concertId    콘서트 ID
@@ -433,7 +435,7 @@ public class SeatStatusService {
     }
 
     /**
-     * 특정 사용자의 선점 좌석 조회
+     * 특정 사용자가 특정 콘서트에서 선점한(Reserved 상태인) 좌석 조회
      */
     public List<SeatStatus> getUserReservedSeats(Long concertId, Long userId) {
         Map<Long, SeatStatus> allSeats = getAllSeatStatus(concertId);

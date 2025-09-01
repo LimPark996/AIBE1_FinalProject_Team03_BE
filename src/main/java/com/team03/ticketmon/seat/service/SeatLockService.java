@@ -77,7 +77,7 @@ public class SeatLockService {
         LocalDateTime lockStartTime = LocalDateTime.now();
 
         try {
-            // 1. 현재 좌석 상태 조회 및 검증
+            // 1. concertSeatId라는 현재 좌석 상태 조회 및 검증 (Reserved 상태인가 & 만료하지 않았는가 & 대상자가 일치하는가)
             SeatStatus currentSeat = validateSeatForLocking(concertId, concertSeatId, userId);
 
             // 2. TTL 키 삭제 (자동 만료 방지)
@@ -250,15 +250,17 @@ public class SeatLockService {
         List<Long> successfulSeatIds = new ArrayList<>();
 
         try {
-            // 1. 사용자의 모든 선점 좌석 조회
+            // 1. 사용자의 모든 선점 좌석 조회(특정 사용자의 특정 콘서트에 대한.. isReserved 상태)
             List<SeatStatus> userReservedSeats = seatStatusService.getUserReservedSeats(concertId, userId);
 
+            // isReserved 상태인 좌석이 없는 경우 -> 영구 선점할 좌석이 없다.
             if (userReservedSeats.isEmpty()) {
                 log.info("영구 선점할 좌석이 없음: concertId={}, userId={}", concertId, userId);
                 return BulkSeatLockResultDTO.failure(concertId, userId,
                         BulkSeatLockResultDTO.BulkOperationType.LOCK, "선점된 좌석이 없습니다.");
             }
 
+            // isReserved 상태인 좌석이 있는 경우 -> 영구 선점할 좌석이 있다.
             log.info("일괄 영구 선점 대상 좌석 수: {} (concertId={}, userId={})",
                     userReservedSeats.size(), concertId, userId);
 
@@ -599,19 +601,21 @@ public class SeatLockService {
     }
 
     /**
-     * 좌석 영구 선점을 위한 검증
+     * 좌석 영구 선점을 위한 검증 => Reserved 상태인가 & 만료 이전 상태인가 & 좌석 선점 = 영구 선점 요청자 동일한가
      */
     private SeatStatus validateSeatForLocking(Long concertId, Long concertSeatId, Long userId) {
-        // 1. 좌석 상태 존재 여부 확인
+        // 1. concertSeatId의 좌석 상태 존재 여부 확인
         Optional<SeatStatus> currentStatus = seatStatusService.getSeatStatus(concertId, concertSeatId);
 
         if (currentStatus.isEmpty()) {
             throw new SeatReservationException("존재하지 않는 좌석입니다.");
         }
 
+        // concertSeatId의 좌석이 존재하는 경우 시행됨
         SeatStatus currentSeat = currentStatus.get();
 
         // 2. 현재 상태가 RESERVED인지 확인
+        // 현재 concertSeatId가 Reserved 상태가 아니라면.. = 선점되지 않은 상태라고 정의한다.
         if (!currentSeat.isReserved()) {
             throw new SeatReservationException(
                     String.format("선점되지 않은 좌석은 영구 선점할 수 없습니다. 현재 상태: %s",
@@ -619,11 +623,13 @@ public class SeatLockService {
         }
 
         // 3. 선점 만료 확인
+        // 현재 concertSeatId가 Reserved 상태이지만, 만료했다! = 선점 만료!
         if (currentSeat.isExpired()) {
             throw new SeatReservationException("만료된 선점 좌석은 영구 선점할 수 없습니다.");
         }
 
         // 4. 권한 검증 (선점한 사용자와 요청 사용자 일치)
+        // 영구 선점을 요청한 사용자와 좌석을 이미 선점한 사용자가 동일함
         if (!userId.equals(currentSeat.getUserId())) {
             throw new SeatReservationException("다른 사용자가 선점한 좌석은 영구 선점할 수 없습니다.");
         }
@@ -632,14 +638,14 @@ public class SeatLockService {
     }
 
     /**
-     * TTL 키 삭제
+     * concertSeatId에 대한 redissonClient에서 TTL 키 삭제
      */
     private boolean removeSeatTTLKey(Long concertId, Long concertSeatId) {
         try {
             String ttlKey = SEAT_TTL_KEY_PREFIX + concertId + ":" + concertSeatId;
-            RBucket<String> bucket = redissonClient.getBucket(ttlKey);
+            RBucket<String> bucket = redissonClient.getBucket(ttlKey); // concertSeatId 입력해서 Bucket 가져옴
 
-            boolean deleted = bucket.delete();
+            boolean deleted = bucket.delete(); // bucket 삭제 시도 (True or False)
 
             if (deleted) {
                 log.debug("TTL 키 삭제 성공: key={}", ttlKey);

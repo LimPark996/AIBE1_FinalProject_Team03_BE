@@ -34,8 +34,8 @@ public class SeatCacheInitService {
     private static final String SEAT_STATUS_KEY_PREFIX = RedisKeyGenerator.SEAT_STATUS_KEY_PREFIX;
 
     /**
-     * ✅ 수정된 DB 기반 좌석 캐시 초기화
-     * 핵심 수정: ConcertSeat ID 사용으로 ID 매핑 일관성 확보
+     * DB 기반 좌석 캐시 초기화
+     * ConcertSeat ID 사용으로 ID 매핑 일관성 확보
      */
     @Transactional(readOnly = true)
     public void initializeSeatCacheFromDB(Long concertId) {
@@ -50,7 +50,7 @@ public class SeatCacheInitService {
                 return;
             }
 
-            // 2. Redis 캐시 구조 준비
+            // 2. DB에 콘서트의 좌석 정보가 있다면, Redis 캐시 구조 준비
             String key = SEAT_STATUS_KEY_PREFIX + concertId;
             RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
 
@@ -61,13 +61,14 @@ public class SeatCacheInitService {
             Map<String, SeatStatus> batchSeatData = new HashMap<>();
             int bookedCount = 0;
 
+            // 콘서트 내 개별 좌석 상태 확인 -> 개별 좌석 상태 객체(SeatStatus) 생성
             for (ConcertSeat concertSeat : concertSeats) {
                 try {
-                    // 4. ✅ 핵심 수정: ConcertSeat ID 사용
+                    // 4. ConcertSeat ID 사용
                     Seat seat = concertSeat.getSeat();
-                    Long concertSeatId = concertSeat.getConcertSeatId(); // ← 수정: ConcertSeat의 ID 사용
+                    Long concertSeatId = concertSeat.getConcertSeatId(); // ConcertSeat의 ID 사용
 
-                    // 5. 예매 여부 확인 (Ticket 존재 여부로 판별)
+                    // 5. 현재 상황에서의 예매 여부는 Ticket 존재 여부와 SeatStatus가 BOOKED이냐로 판별함
                     boolean isBooked = concertSeat.getTicket() != null;
                     SeatStatusEnum status = isBooked ? SeatStatusEnum.BOOKED : SeatStatusEnum.AVAILABLE;
 
@@ -78,11 +79,11 @@ public class SeatCacheInitService {
                     // 6. 좌석 정보 생성
                     String seatInfo = generateSeatInfoFromDB(seat);
 
-                    // 7. ✅ 수정된 SeatStatus 객체 생성 (ConcertSeat ID 사용)
+                    // 7. SeatStatus(예매 상태인지, 예매 가능 상태인지 등 좌석 상태를 알 수 있음) 객체 생성 (ConcertSeat ID 사용)
                     SeatStatus seatStatus = SeatStatus.builder()
-                            .id(concertId + "-" + concertSeatId)  // ← 수정
+                            .id(concertId + "-" + concertSeatId)
                             .concertId(concertId)
-                            .seatId(concertSeatId)                // ← 수정: ConcertSeat ID 사용
+                            .seatId(concertSeatId)                // ConcertSeat ID 사용
                             .status(status)
                             .userId(null) // 초기화 시에는 선점 사용자 없음
                             .reservedAt(null)
@@ -90,8 +91,8 @@ public class SeatCacheInitService {
                             .seatInfo(seatInfo)
                             .build();
 
-                    // 8. ✅ 수정된 키 사용 (ConcertSeat ID로 저장)
-                    batchSeatData.put(concertSeatId.toString(), seatStatus); // ← 수정
+                    // 8. 수정된 키 사용 (ConcertSeat ID로 저장)
+                    batchSeatData.put(concertSeatId.toString(), seatStatus);
 
                 } catch (Exception e) {
                     log.error("좌석 상태 생성 중 오류: concertId={}, concertSeat={}",
@@ -100,7 +101,7 @@ public class SeatCacheInitService {
                 }
             }
 
-            // 9. 한 번의 Redis 호출로 모든 데이터 일괄 저장
+            // 9. 한 번의 Redis 호출로 모든 데이터를 seatMap에 일괄 저장
             if (!batchSeatData.isEmpty()) {
                 seatMap.putAll(batchSeatData);
 
@@ -117,7 +118,7 @@ public class SeatCacheInitService {
     }
 
     /**
-     * ✅ 내부 헬퍼 메서드: Seat 엔티티로부터 좌석 정보 생성 - seatInfo
+     * Seat 엔티티로부터 get을 활용해서 좌석 정보 생성 - seatInfo
      */
     private String generateSeatInfoFromDB(Seat seat) {
         if (seat == null) {
