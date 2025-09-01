@@ -180,25 +180,26 @@ public class SeatCacheInitService {
     }
 
     /**
-     * ✅ 캐시 삭제
+     * 특정 콘서트에 대한 모든 좌석 캐시 삭제
      */
     public String clearSeatCache(Long concertId) {
         try {
             String key = SEAT_STATUS_KEY_PREFIX + concertId;
             RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
 
-            if (!seatMap.isExists()) {
+            if (!seatMap.isExists()) { // 삭제할 좌석 캐시가 아예 존재하지 않은 경우
                 log.info("삭제할 좌석 캐시가 존재하지 않음: concertId={}, key={}", concertId, key);
                 return "삭제할 캐시가 없습니다.";
             }
 
-            int seatCount = seatMap.size();
-            boolean deleted = seatMap.delete();
+            // 삭제할 좌석 캐시가 존재하는 경우
+            int seatCount = seatMap.size(); // 삭제할 좌석 수
+            boolean deleted = seatMap.delete(); // 삭제 성공 유무 (True or False)
 
-            if (deleted) {
+            if (deleted) { // 삭제 성공한 경우 -> 좌석 캐시 삭제 완료 log를 띄움
                 log.info("좌석 캐시 삭제 완료: concertId={}, deletedSeats={}", concertId, seatCount);
                 return String.format("좌석 캐시 삭제 성공 (삭제된 좌석 수: %d)", seatCount);
-            } else {
+            } else { // 삭제 실패한 경우 -> 좌석 캐시 삭제 실패 log를 띄움
                 log.warn("좌석 캐시 삭제 실패: concertId={}", concertId);
                 return "캐시 삭제에 실패했습니다.";
             }

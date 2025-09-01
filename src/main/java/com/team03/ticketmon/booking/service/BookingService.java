@@ -159,11 +159,11 @@ public class BookingService {
     }
 
     /**
-     * 좌석 캐시 새로고침
+     * 특정 콘서트에 대한 모든 좌석 캐시 새로고침
      */
     private void refreshSeatCache(Long concertId) {
         try {
-            // 기존 캐시 삭제
+            // 특정 콘서트에 존재하는 모든 좌석 캐시 삭제
             seatCacheInitService.clearSeatCache(concertId);
 
             // DB 기반 캐시 재초기화
