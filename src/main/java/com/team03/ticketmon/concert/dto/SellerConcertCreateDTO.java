@@ -82,11 +82,6 @@ public class SellerConcertCreateDTO {
 	@Schema(description = "최소 연령 제한", example = "0", minimum = "0", maximum = "100")
 	private Integer minAge;
 
-	@Min(value = 1, message = "사용자당 최대 티켓 수는 1개 이상이어야 합니다")
-	@Max(value = 10, message = "사용자당 최대 티켓 수는 10개 이하여야 합니다")
-	@Schema(description = "사용자당 최대 구매 가능 티켓 수", example = "4", minimum = "1", maximum = "10")
-	private Integer maxTicketsPerUser;
-
 	@Size(max = 2000, message = "URL이 너무 깁니다")
 	@Schema(description = "포스터 이미지 URL", example = "https://example.com/posters/iu-2025.jpg")
 	private String posterImageUrl;

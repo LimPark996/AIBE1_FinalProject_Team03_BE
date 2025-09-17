@@ -292,7 +292,6 @@ public class SellerConcertController {
 							"bookingStartDate": "2025-07-01T10:00:00",
 							"bookingEndDate": "2025-08-14T23:59:59",
 							"minAge": 0,
-							"maxTicketsPerUser": 4,
 							"status": "SCHEDULED",
 							"posterImageUrl": "https://example.com/posters/iu-2025.jpg",
 							"createdAt": "2025-06-22T10:00:00",

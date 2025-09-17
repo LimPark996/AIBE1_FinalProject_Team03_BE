@@ -307,7 +307,6 @@ public class ConcertController {
 							"bookingStartDate": "2025-07-01T10:00:00",
 							"bookingEndDate": "2025-08-14T23:59:59",
 							"minAge": 0,
-							"maxTicketsPerUser": 4,
 							"status": "ON_SALE",
 							"posterImageUrl": "https://example.com/posters/iu-2025.jpg",
 							"aiSummary": "아이유의 2025년 새 앨범 발매 기념 월드투어 서울 공연으로, 신곡과 대표곡을 함께 들을 수 있는 특별한 무대입니다."

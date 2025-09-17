@@ -339,7 +339,6 @@ public class SellerConcertService {
 		// 숫자 필드들 - 기본값 처리
 		concert.setTotalSeats(createDTO.getTotalSeats());
 		concert.setMinAge(createDTO.getMinAge() != null ? createDTO.getMinAge() : 0);
-		concert.setMaxTicketsPerUser(createDTO.getMaxTicketsPerUser() != null ? createDTO.getMaxTicketsPerUser() : 4);
 
 		// 시스템 설정값들
 		concert.setSellerId(sellerId);
@@ -399,9 +398,6 @@ public class SellerConcertService {
 		if (updateDTO.getMinAge() != null) {
 			concert.setMinAge(updateDTO.getMinAge());
 		}
-		if (updateDTO.getMaxTicketsPerUser() != null) {
-			concert.setMaxTicketsPerUser(updateDTO.getMaxTicketsPerUser());
-		}
 
 		// 상태 필드
 		if (updateDTO.getStatus() != null) {
@@ -430,7 +426,6 @@ public class SellerConcertService {
 			.bookingStartDate(concert.getBookingStartDate())
 			.bookingEndDate(concert.getBookingEndDate())
 			.minAge(concert.getMinAge())
-			.maxTicketsPerUser(concert.getMaxTicketsPerUser())
 			.status(concert.getStatus())
 			.posterImageUrl(convertedPosterUrl)
 			.aiSummary(concert.getAiSummary())
