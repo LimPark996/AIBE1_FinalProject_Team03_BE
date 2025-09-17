@@ -21,7 +21,7 @@ spring:
   # JPA (Hibernate) 관련 설정
   jpa:
     hibernate:
-      ddl-auto: validate             # 운영 환경에서는 DDL 자동 변경을 금지하고 스키마 유효성만 검사
+      ddl-auto: update             # 운영 환경에서는 DDL 자동 변경을 금지하고 스키마 유효성만 검사
     show-sql: false                  # 운영 환경에서는 SQL 쿼리 출력을 비활성화하여 성능 및 보안을 강화
     #    properties:
     #     hibernate:
