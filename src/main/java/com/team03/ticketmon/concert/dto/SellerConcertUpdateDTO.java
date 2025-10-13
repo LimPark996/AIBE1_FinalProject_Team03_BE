@@ -71,6 +71,11 @@ public class SellerConcertUpdateDTO {
 	@Schema(description = "최소 연령 제한", example = "0", minimum = "0", maximum = "100")
 	private Integer minAge;
 
+	@Min(value = 1, message = "1인당 최대 티켓 수는 1개 이상이어야 합니다")
+	@Max(value = 10, message = "1인당 최대 티켓 수는 10개 이하여야 합니다")
+	@Schema(description = "1인당 최대 구매 가능 티켓 수", example = "4", minimum = "1", maximum = "10")
+	private Integer maxTicketsPerUser;
+
 	@Schema(description = "콘서트 상태", example = "ON_SALE",
 		allowableValues = {"SCHEDULED", "ON_SALE", "SOLD_OUT", "CANCELLED", "COMPLETED"})
 	private ConcertStatus status;
@@ -91,7 +96,7 @@ public class SellerConcertUpdateDTO {
 			startTime != null || endTime != null || totalSeats != null ||
 			bookingStartDate != null || bookingEndDate != null ||
 			minAge != null || status != null ||
-			posterImageUrl != null;
+			posterImageUrl != null || maxTicketsPerUser != null;
 	}
 
 	/**

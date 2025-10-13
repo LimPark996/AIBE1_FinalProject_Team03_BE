@@ -33,6 +33,7 @@ public class SellerConcertDTO {
 	private LocalDateTime bookingStartDate;
 	private LocalDateTime bookingEndDate;
 	private Integer minAge;
+	private Integer maxTicketsPerUser;
 	private ConcertStatus status;
 	private String posterImageUrl;
 	private String aiSummary;

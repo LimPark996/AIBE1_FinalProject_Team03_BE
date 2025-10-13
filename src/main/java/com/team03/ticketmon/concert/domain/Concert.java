@@ -88,6 +88,10 @@ public class Concert extends BaseTimeEntity {
 	@Builder.Default
 	private Integer minAge = 0;
 
+	@Column(name = "max_tickets_per_user")
+	@Builder.Default
+	private Integer maxTicketsPerUser = 4; // 기본값 4개
+
 	// ENUM을 문자열로 저장 (ORDINAL 사용 금지)
 	@Enumerated(EnumType.STRING)
 	@Column(length = 20, nullable = false)
