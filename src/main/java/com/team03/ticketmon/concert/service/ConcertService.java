@@ -414,6 +414,7 @@ public class ConcertService {
 			concert.getBookingStartDate(),
 			concert.getBookingEndDate(),
 			concert.getMinAge(),
+			concert.getMaxTicketsPerUser(),
 			concert.getStatus(),
 			convertedPosterUrl,
 			concert.getAiSummary(),
