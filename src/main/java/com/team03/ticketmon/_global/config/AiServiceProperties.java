@@ -11,7 +11,7 @@ public class AiServiceProperties {
 
 	private String apiKey;
 	private String apiUrl = "https://api.together.xyz/v1/chat/completions";
-	private String model = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free";
+	private String model = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
 	private Integer timeoutSeconds = 30;
 	private Integer maxRetries = 3;
 	private Integer maxTokensPerRequest = 100000;     // 요청당 최대 토큰 수
