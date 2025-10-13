@@ -104,10 +104,10 @@ ai:
   together:
     api-key: ${AI_API_KEY}
     api-url: "https://api.together.xyz/v1/chat/completions"
-    model: "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+    model: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
     timeout-seconds: 120
     max-retries: 3
-    max-tokens-per-request: 100000
+    max-tokens-per-request: 7000
     max-reviews-per-request: 50
     chars-per-token: 2.5
     token-safety-margin: 0.2
