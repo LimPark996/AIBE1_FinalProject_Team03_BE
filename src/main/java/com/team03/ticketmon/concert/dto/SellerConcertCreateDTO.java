@@ -1,5 +1,6 @@
 package com.team03.ticketmon.concert.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -56,11 +57,13 @@ public class SellerConcertCreateDTO {
 	private LocalDate concertDate;
 
 	@NotNull(message = "시작 시간은 필수입니다")
-	@Schema(description = "공연 시작 시간", example = "19:00:00")
+	@JsonFormat(pattern = "HH:mm")
+	@Schema(description = "공연 시작 시간", example = "19:00")
 	private LocalTime startTime;
 
 	@NotNull(message = "종료 시간은 필수입니다")
-	@Schema(description = "공연 종료 시간", example = "21:30:00")
+	@JsonFormat(pattern = "HH:mm")
+	@Schema(description = "공연 종료 시간", example = "21:30")
 	private LocalTime endTime;
 
 	@NotNull(message = "총 좌석 수는 필수입니다")
@@ -70,11 +73,13 @@ public class SellerConcertCreateDTO {
 	private Integer totalSeats;
 
 	@NotNull(message = "예매 시작일시는 필수입니다")
-	@Schema(description = "예매 시작일시", example = "2025-07-01T10:00:00")
+	@JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+	@Schema(description = "예매 시작일시", example = "2025-07-01T10:00")
 	private LocalDateTime bookingStartDate;
 
 	@NotNull(message = "예매 종료일시는 필수입니다")
-	@Schema(description = "예매 종료일시", example = "2025-08-14T23:59:59")
+	@JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm")
+	@Schema(description = "예매 종료일시", example = "2025-08-14T23:59")
 	private LocalDateTime bookingEndDate;
 
 	@Min(value = 0, message = "최소 연령은 0세 이상이어야 합니다")
