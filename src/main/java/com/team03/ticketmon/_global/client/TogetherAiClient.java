@@ -125,7 +125,7 @@ public class TogetherAiClient {
 				"repetition_penalty", 1.1,       // 반복 방지 (1.0~1.3 권장)
 				"frequency_penalty", 0.1,        // 빈도 기반 반복 방지
 				"presence_penalty", 0.1,         // 존재 기반 반복 방지
-				"max_tokens", 1000              // 토큰 수 제한으로 길이 조절
+				"max_tokens", 700              // 토큰 수 제한으로 길이 조절
 			);
 
 			return new HttpEntity<>(requestBody, headers);
