@@ -56,21 +56,16 @@ public class SeatLayoutService {
             log.debug("콘서트 정보 조회 성공: concertId={}, title={}, venueName={}",
                     concertId, concert.getTitle(), concert.getVenueName());
 
-            // 2. 🚀 핵심 수정: 공연장 정보 조회 (venueName으로 조회)
-            VenueDTO venue;
-            try {
-                venue = venueService.getVenueByName(concert.getVenueName());
-                log.debug("공연장 정보 조회 성공: venueName={}, venueId={}",
-                        concert.getVenueName(), venue.getVenueId());
+            // 2. 공연장 정보 조회 (예외 없이 처리)
+            VenueDTO venue = venueService.getVenueByName(concert.getVenueName())
+                    .orElseGet(() -> {
+                        log.warn("공연장 정보를 찾을 수 없음: venueName={}, concertId={}",
+                                concert.getVenueName(), concertId);
+                        log.info("대체 공연장 정보 사용: venueName={}", concert.getVenueName());
+                        return createFallbackVenueInfo(concert.getVenueName());
+                    });
 
-            } catch (BusinessException e) {
-                log.warn("공연장 정보를 찾을 수 없음: venueName={}, concertId={}, error={}",
-                        concert.getVenueName(), concertId, e.getMessage());
-
-                // 🔧 공연장 정보가 없어도 좌석 배치도는 제공 (대체 로직)
-                venue = createFallbackVenueInfo(concert.getVenueName());
-                log.info("대체 공연장 정보 사용: venueName={}", concert.getVenueName());
-            }
+            log.debug("공연장 정보 준비 완료: venueName={}", venue.getName());
 
             SeatLayoutResponseDTO.VenueInfo venueInfo = SeatLayoutResponseDTO.VenueInfo.from(venue);
 

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -61,7 +62,7 @@ public class VenueService {
      * @throws BusinessException 해당 이름의 공연장이 없을 경우
      */
     @Cacheable(value = "venue-by-name", key = "#venueName")
-    public VenueDTO getVenueByName(String venueName) {
+    public Optional<VenueDTO> getVenueByName(String venueName) {
         log.debug("공연장 이름으로 조회 시작: venueName={} (캐시 미스)", venueName);
 
         // 입력값 검증
@@ -101,7 +102,7 @@ public class VenueService {
         log.debug("공연장 이름으로 조회 성공: venueName={}, venueId={}, capacity={} (캐시 저장)",
                 trimmedVenueName, venue.getVenueId(), venue.getCapacity());
 
-        return new VenueDTO(venue);
+        return Optional.of(new VenueDTO(venue));
     }
 
     /**
