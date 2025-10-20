@@ -57,13 +57,12 @@ public class SeatLayoutService {
                     concertId, concert.getTitle(), concert.getVenueName());
 
             // 2. 공연장 정보 조회 (예외 없이 처리)
-            VenueDTO venue = venueService.getVenueByName(concert.getVenueName())
-                    .orElseGet(() -> {
-                        log.warn("공연장 정보를 찾을 수 없음: venueName={}, concertId={}",
-                                concert.getVenueName(), concertId);
-                        log.info("대체 공연장 정보 사용: venueName={}", concert.getVenueName());
-                        return createFallbackVenueInfo(concert.getVenueName());
-                    });
+            VenueDTO venue = venueService.getVenueByName(concert.getVenueName());
+            if (venue == null) {
+                    log.warn("공연장 정보를 찾을 수 없음: venueName={}, concertId={}", concert.getVenueName(), concertId);
+                    log.info("대체 공연장 정보 사용: venueName={}", concert.getVenueName());
+                    venue = createFallbackVenueInfo(concert.getVenueName());
+            };
 
             log.debug("공연장 정보 준비 완료: venueName={}", venue.getName());
 

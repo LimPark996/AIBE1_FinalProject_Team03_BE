@@ -61,13 +61,13 @@ public class VenueService {
      * @throws BusinessException 해당 이름의 공연장이 없을 경우
      */
     @Cacheable(value = "venue-by-name", key = "#venueName")
-    public Optional<VenueDTO> getVenueByName(String venueName) {
+    public VenueDTO getVenueByName(String venueName) {
         log.debug("공연장 이름으로 조회 시작: venueName={} (캐시 미스)", venueName);
 
         // 입력값 검증
         if (venueName == null || venueName.trim().isEmpty()) {
             log.warn("공연장 이름이 비어있음");
-            return Optional.empty();
+            return null;
         }
 
         String trimmedVenueName = venueName.trim();
@@ -75,15 +75,14 @@ public class VenueService {
 
         if (venueOpt.isEmpty()) {
             log.warn("공연장을 찾을 수 없음: venueName={}", trimmedVenueName);
-            return Optional.empty();
+            return null;
         }
 
         // 공연장을 찾은 경우
         Venue venue = venueOpt.get();
-
         log.debug("공연장 이름으로 조회 성공: venueName={}, venueId={}, capacity={} (캐시 저장)",
             trimmedVenueName, venue.getVenueId(), venue.getCapacity());
 
-        return Optional.of(new VenueDTO(venue));
+        return new VenueDTO(venue);
     }
 }
