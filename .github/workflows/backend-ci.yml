@@ -19,21 +19,6 @@ jobs:
       contents: read
       packages: write
 
-    services:
-      # redis-cache 서비스 제거: Aiven Redis를 사용하므로 CI 환경에서 Redis를 띄울 필요 없음
-      localstack: # LocalStack 서비스 (SQS, S3 등 AWS 서비스 모킹)
-        image: localstack/localstack:latest
-        ports:
-          - 4566:4566 # LocalStack 기본 포트
-        env: # LocalStack 컨테이너 내부에 필요한 환경 변수
-          SERVICES: sqs,s3 # 필요한 AWS 서비스만 지정 (예: SQS, S3)
-          AWS_DEFAULT_REGION: ap-northeast-2
-        options: >- # 헬스체크 (LocalStack이 준비될 때까지 기다림)
-          --health-cmd "awslocal sqs list-queues"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -47,17 +32,6 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      # 참고: 이 부분은 파일 권한 부여에 해당하며, 원본 파일의 "run: chmod +x gradlew"와 동일
-
-      # Configure Redis for CI 단계 제거: Aiven Redis를 사용하므로 CI 환경에서 Redis 설정이 필요 없음
-
-      - name: Configure LocalStack for CI # LocalStack 환경 변수 설정
-        run: |
-          echo "SQS_ENDPOINT=http://localstack:4566" >> $GITHUB_ENV # 서비스 이름을 호스트로 사용
-          echo "::add-mask::${{ secrets.AWS_ACCESS_KEY }}"  # AWS Access Key를 로그에서 마스킹
-          echo "AWS_ACCESS_KEY=${{ secrets.AWS_ACCESS_KEY }}" >> $GITHUB_ENV # Secrets에서 주입
-          echo "::add-mask::${{ secrets.AWS_SECRET_KEY }}" # AWS Secret Key를 로그에서 마스킹
-          echo "AWS_SECRET_KEY=${{ secrets.AWS_SECRET_KEY }}" >> $GITHUB_ENV # Secrets에서 주입
 
       - name: Configure GitHub Packages for Gradle  # GH_PACKAGES 환경변수 설정
         run: |
