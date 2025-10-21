@@ -284,7 +284,6 @@ public class ConcertService {
 	 */
 	@Cacheable(value = "concertDetail", key = "#concertId")
 	public Optional<ConcertDTO> getConcertById(@Param("concertId") Long concertId) {
-		log.info("🔍 [CACHE MISS] getConcertById 실행 - concertId: {} (DB 조회)", concertId);
 
 		Optional<Concert> concert = concertRepository.findById(concertId);
 		Optional<ConcertDTO> result = concert.map(this::convertToDTO);
