@@ -77,23 +77,12 @@ public class Booking extends BaseTimeEntity {
 	@OneToOne(mappedBy = "booking", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
 	private Payment payment;
 
-	/**
-	 * 예매 상태를 '확정'으로 변경
-	 */
 	public void confirm() {
 		this.status = BookingStatus.CONFIRMED;
 	}
-
-	/**
-	 * 예매 상태를 '취소'로 변경
-	 */
 	public void cancel() {
 		this.status = BookingStatus.CANCELED;
 	}
-
-	/**
-	 * 예매 상태를 '결제 대기'로 변경
-	 */
 	public void pending() {
 		this.status = BookingStatus.PENDING_PAYMENT;
 	}
@@ -105,7 +94,7 @@ public class Booking extends BaseTimeEntity {
 	 * @param tickets Booking에 연결할 Ticket 목록
 	 */
 	public void setTickets(List<Ticket> tickets) {
-		this.tickets.clear(); // 기존 컬렉션을 지우고 새롭게 추가 (orphanRemoval 발동)
+		this.tickets.clear();
 		if (tickets != null) {
 			this.tickets.addAll(tickets);
 			for (Ticket ticket : tickets) {
@@ -115,70 +104,47 @@ public class Booking extends BaseTimeEntity {
 	}
 
 	/**
-	 * Booking과 Payment 간의 양방향 관계를 설정하는 헬퍼 메서드
-	 * @param payment 이 Booking에 연결할 Payment 엔티티
-	 */
-	public void setPayment(Payment payment) {
-		this.payment = payment;
-	}
-
-	/**
-	 * 예매의 총 금액과 상태를 업데이트
-	 * 부분 취소/환불과 같은 시나리오에서 사용될 수 있음
-	 * @param newAmount 새로 계산된 총 금액
-	 * @param newStatus 변경할 예매 상태
-	 */
-	public void updateTotalAmountAndStatus(BigDecimal newAmount, BookingStatus newStatus) {
-		this.totalAmount = newAmount;
-		this.status = newStatus;
-	}
-
-	/**
 	 * 새로운 Booking 엔티티를 생성하는 정적 팩토리 메서드
 	 * 이 메서드를 통해 Booking 객체의 생성 규칙과 초기 상태를 강제
-	 * @param userId 예매를 생성하는 사용자 ID
-	 * @param concert 예매 대상 콘서트
-	 * @param selectedSeats 선택된 콘서트 좌석 목록
+	 * @param userId 예매를 시도하는 사용자 ID
+	 * @param concert 대상 콘서트
+	 * @param selectedSeats 선택한 콘서트 좌석 리스트
 	 * @return 생성된 Booking 엔티티
 	 */
 	public static Booking createBooking(Long userId, Concert concert, List<ConcertSeat> selectedSeats) {
-		// 1. 선택된 좌석들로 Ticket들을 생성하고, Booking과의 관계 설정
+		// 1. 선택된 좌석들을 각각 createTicket()으로 맵핑
 		List<Ticket> tickets = selectedSeats.stream()
 			.map(Ticket::createTicket)
 			.toList();
 
-		// 2. 티켓 총액 계산
+		// 2. Ticket들의 총액 계산
 		BigDecimal ticketSubtotal = tickets.stream()
 				.map(Ticket::getPrice)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 
-		// 3. 수수료 추가 (2000원)
+		// 3. 수수료(serviceFee) 추가 (2000원)
 		BigDecimal serviceFee = new BigDecimal("2000");
 		BigDecimal totalAmount = ticketSubtotal.add(serviceFee);
 
-		// 2. Booking 뼈대 생성
+		// 4. Booking 객체 생성
 		Booking booking = Booking.builder()
 			.userId(userId)
 			.concert(concert)
 			.bookingNumber(UUID.randomUUID().toString())
-			.status(BookingStatus.PENDING_PAYMENT)
+			.status(BookingStatus.PENDING_PAYMENT) // 결제 대기 상태
 			.totalAmount(totalAmount)
 			.build();
 
-		// 3. 생성된 Booking에 Ticket 목록 설정 (양방향 관계 확립)
+		// 5. Booking 객체에서 Ticket 리스트 설정 - 이 과정을 통해 Booking과 Ticket을 연결할 수 있다.
 		booking.setTickets(tickets);
 		return booking;
 	}
 
-	/**
-	 * Helper to clear all associated tickets and break bidirectional links,
-	 * triggering orphanRemoval for tickets and releasing concertSeat linkage.
-	 */
 	public void removeAllTickets() {
 		for (Ticket ticket : new ArrayList<>(tickets)) {
-			ticket.setBooking(null); // booking과 엮인 모든 ticket들을 null로 처리한다.
-			if (ticket.getConcertSeat() != null) { // 만약 특정 ticket과 ConcertSeat이 여전히 연걸되어 있으면
-				ticket.getConcertSeat().releaseTicket(); // 해당 ticket과 ConcertSeat의 연결 관계를 끊는다.
+			ticket.setBooking(null); // Ticket 객체에서 Booking은 모두 null로 처리한다.
+			if (ticket.getConcertSeat() != null) { // 만약 ticket과 ConcertSeat이 여전히 연걸되어 있으면
+				ticket.getConcertSeat().releaseTicket(); // ticket과 ConcertSeat의 연결 관계를 release한다.
 			}
 		}
 		tickets.clear(); // ticket들의 리스트를 비운다.

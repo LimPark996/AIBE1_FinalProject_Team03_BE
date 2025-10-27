@@ -3,10 +3,7 @@ package com.team03.ticketmon.payment.domain.entity;
 import com.team03.ticketmon.booking.domain.Booking;
 import com.team03.ticketmon.payment.domain.enums.PaymentStatus;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -18,14 +15,13 @@ import java.time.LocalDateTime;
 public class Payment {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id") // DB 컬럼 이름에 맞춤
+    @Column(name = "id")
     private Long paymentId;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", nullable = false, unique = true)
     private Booking booking;
 
-    // 💡 [수정] user_id 컬럼에 직접 매핑될 필드 추가
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
 
@@ -39,6 +35,7 @@ public class Payment {
     private String paymentKey;
 
     @Column(length = 50)
+    @Setter
     private String paymentMethod;
 
     @Enumerated(EnumType.STRING)
@@ -53,9 +50,6 @@ public class Payment {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    /**
-     * 취소 이력 (1:1)
-     */
     @OneToOne(
             mappedBy = "payment",
             cascade = CascadeType.ALL,
@@ -63,13 +57,6 @@ public class Payment {
             fetch = FetchType.LAZY
     )
     private PaymentCancelHistory cancelHistory;
-
-    /**
-     * 클라이언트가 선택한 결제수단 ("카드" 또는 "간편결제")
-     */
-    public void setPaymentMethod(String paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
 
     @PrePersist
     protected void onCreate() {

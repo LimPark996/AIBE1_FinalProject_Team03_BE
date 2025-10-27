@@ -31,7 +31,7 @@ public record SeatLayoutResponseDTO(
 ) {
 
     /**
-     * 공연장 정보
+     * 공연장 정보: VenueDTO 에서 공연장 ID 와 공연장명만 추출한다.
      */
     @Schema(description = "공연장 정보")
     public record VenueInfo(
@@ -80,23 +80,24 @@ public record SeatLayoutResponseDTO(
     ) {}
 
     /**
-     * 구역별 좌석 정보로부터 전체 좌석 배치도 응답 생성
-     *
+     * 각 구역별 좌석 정보로부터 전체 좌석 배치도 응답 생성
      * @param concertId 콘서트 ID
      * @param venueInfo 공연장 정보
      * @param sections 구역별 좌석 정보
      * @return SeatLayoutResponse 객체
      */
     public static SeatLayoutResponseDTO from(Long concertId, VenueInfo venueInfo, List<SectionLayoutResponseDTO> sections) {
-        // 전체 좌석 통계 계산
+        // 전체 좌석 수 계산
         int totalSeats = sections.stream()
                 .mapToInt(SectionLayoutResponseDTO::totalSeats)
                 .sum();
 
+        // 전체 예매 가능 좌석 수 계산
         int availableSeats = sections.stream()
                 .mapToInt(SectionLayoutResponseDTO::availableSeats)
                 .sum();
 
+        // 전체 예매가 이미 되어있는 좌석 수 계산
         int bookedSeats = totalSeats - availableSeats;
 
         double availabilityRate = totalSeats > 0 ?

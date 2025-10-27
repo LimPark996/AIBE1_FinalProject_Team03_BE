@@ -34,9 +34,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             """)
     List<Booking> findByUserId(@Param("userId") Long userId);
 
-    @Query("SELECT b FROM Booking b JOIN FETCH b.concert WHERE b.id = :id")
-    Optional<Booking> findWithConcertById(@Param("id") Long id);
-
+    // 결제 대기 중인 예매들 중에서 만료 시간이 지난 예매들을 찾음
     @Query("""
                 select distinct b from Booking b
                 join fetch b.concert
@@ -48,9 +46,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             """)
     List<Booking> findExpiredPendingBookings(@Param("expirationTime") LocalDateTime expirationTime);
 
-    /**
-     * concert와 tickets 컬렉션을 함께 페치
-     */
+    // 예매 ID로 찾는데, 콘서트 정보랑 티켓 목록도 같이 딸려오게 함
     @Query("""
             SELECT DISTINCT b
               FROM Booking b

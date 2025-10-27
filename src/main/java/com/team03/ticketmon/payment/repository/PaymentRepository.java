@@ -13,7 +13,8 @@ import com.team03.ticketmon.payment.domain.entity.Payment;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 	Optional<Payment> findByOrderId(String orderId);
 
-	List<Payment> findByUserId(Long userId); // Booking의 UserId로 Payment 찾기
+	// Booking의 UserId로 Payment 찾기
+	List<Payment> findByUserId(Long userId);
 
 	Optional<Payment> findByBooking(Booking booking);
 

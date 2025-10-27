@@ -19,18 +19,14 @@ import java.util.List;
 @Repository
 public interface SellerConcertRepository extends JpaRepository<Concert, Long> {
 
-	/**
-	 * 판매자별 콘서트 조회 (페이징)
-	 */
+	//판매자별 콘서트 조회 (페이징)
 	@Query("SELECT c FROM Concert c WHERE " +
 		"c.sellerId = :sellerId " +
 		"ORDER BY c.createdAt DESC")
 	Page<Concert> findBySellerIdOrderByCreatedAtDesc(@Param("sellerId") Long sellerId,
 		Pageable pageable);
 
-	/**
-	 * 판매자별 상태별 콘서트 조회
-	 */
+	// 판매자별 상태별 콘서트 조회
 	@Query("SELECT c FROM Concert c WHERE " +
 		"c.sellerId = :sellerId AND " +
 		"c.status = :status " +
@@ -38,24 +34,21 @@ public interface SellerConcertRepository extends JpaRepository<Concert, Long> {
 	List<Concert> findBySellerIdAndStatus(@Param("sellerId") Long sellerId,
 		@Param("status") ConcertStatus status);
 
-	/**
-	 * 판매자 권한 확인
-	 */
+
+	// 판매자 권한 확인
 	@Query("SELECT COUNT(c) > 0 FROM Concert c WHERE " +
 		"c.concertId = :concertId AND " +
 		"c.sellerId = :sellerId")
 	boolean existsByConcertIdAndSellerId(@Param("concertId") Long concertId,
 		@Param("sellerId") Long sellerId);
 
-	/**
-	 * 판매자별 콘서트 수 조회
-	 */
+
+	// 판매자별 콘서트 수 조회
 	@Query("SELECT COUNT(c) FROM Concert c WHERE c.sellerId = :sellerId")
 	long countBySellerIdOrderByCreatedAtDesc(@Param("sellerId") Long sellerId);
 
-	/**
-	 * 포스터 이미지 업데이트
-	 */
+
+	// 포스터 이미지 업데이트
 	@Modifying
 	@Query("UPDATE Concert c SET " +
 		"c.posterImageUrl = :posterImageUrl, " +
@@ -66,14 +59,9 @@ public interface SellerConcertRepository extends JpaRepository<Concert, Long> {
 		@Param("sellerId") Long sellerId,
 		@Param("posterImageUrl") String posterImageUrl);
 
-	/**
-	 * 판매자 ID와 여러 콘서트 상태 목록으로 콘서트를 조회합니다.
-	 * 판매자 권한 철회 시 활성 콘서트 확인에 사용됩니다.
-	 * @param sellerId 판매자 ID
-	 * @param statuses 조회할 콘서트 상태 목록 (예: ON_SALE, SCHEDULED)
-	 * @return 해당 조건에 맞는 콘서트 목록
-	 */
+
+	// 판매자 ID와 여러 콘서트 상태 목록으로 콘서트를 조회합니다.
+	// 판매자 권한 철회 시 활성 콘서트 확인에 사용됩니다.
 	@Query("SELECT c FROM Concert c WHERE c.sellerId = :sellerId AND c.status IN :statuses")
 	List<Concert> findBySellerIdAndStatusIn(@Param("sellerId") Long sellerId, @Param("statuses") List<ConcertStatus> statuses);
 }
-

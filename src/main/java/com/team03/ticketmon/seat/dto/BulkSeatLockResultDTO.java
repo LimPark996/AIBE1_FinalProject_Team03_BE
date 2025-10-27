@@ -6,13 +6,10 @@ import lombok.Getter;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 다중 좌석 영구 선점 처리 결과 DTO
- *
  * 사용자가 선점한 모든 좌석에 대한 일괄 영구 선점/복원 작업의 결과를 담는 record 클래스
- *
  * 기능:
  * - 전체 처리 성공/실패 여부
  * - 개별 좌석별 상세 결과
@@ -72,30 +69,7 @@ public class BulkSeatLockResultDTO {
     }
 
     /**
-     * 성공한 좌석 목록 조회
-     *
-     * @return 성공한 좌석의 SeatLockResult 목록
-     */
-    public List<SeatLockResultDTO> getSuccessfulSeats() {
-        return seatResults.stream()
-                .filter(SeatLockResultDTO::isSuccess)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 실패한 좌석 목록 조회
-     *
-     * @return 실패한 좌석의 SeatLockResult 목록
-     */
-    public List<SeatLockResultDTO> getFailedSeats() {
-        return seatResults.stream()
-                .filter(result -> !result.isSuccess())
-                .collect(Collectors.toList());
-    }
-
-    /**
      * 성공률 계산
-     *
      * @return 성공률 (0.0 ~ 1.0)
      */
     public double getSuccessRate() {
@@ -140,30 +114,6 @@ public class BulkSeatLockResultDTO {
                     errorMessage != null ? errorMessage : "개별 좌석 오류 확인 필요"
             );
         }
-    }
-
-    /**
-     * 상세 결과 메시지 생성 (개별 좌석별 결과 포함)
-     *
-     * @return 상세 결과 문자열
-     */
-    public String getDetailedSummary() {
-        StringBuilder sb = new StringBuilder();
-        sb.append(getSummary()).append("\n");
-
-        if (!seatResults.isEmpty()) {
-            sb.append("개별 좌석 결과:\n");
-            for (SeatLockResultDTO result : seatResults) {
-                sb.append("  - 좌석 ").append(result.getConcertSeatId())
-                        .append(": ").append(result.isSuccess() ? "성공" : "실패");
-                if (!result.isSuccess() && result.getErrorMessage() != null) {
-                    sb.append(" (").append(result.getErrorMessage()).append(")");
-                }
-                sb.append("\n");
-            }
-        }
-
-        return sb.toString();
     }
 
     /**
@@ -230,6 +180,7 @@ public class BulkSeatLockResultDTO {
     /**
      * 처리 유형 열거형
      */
+    @Getter
     public enum BulkOperationType {
         LOCK("영구 선점"),
         RESTORE("상태 복원");
@@ -238,10 +189,6 @@ public class BulkSeatLockResultDTO {
 
         BulkOperationType(String description) {
             this.description = description;
-        }
-
-        public String getDescription() {
-            return description;
         }
     }
 }

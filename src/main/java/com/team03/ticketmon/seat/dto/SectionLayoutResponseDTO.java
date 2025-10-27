@@ -48,14 +48,13 @@ public record SectionLayoutResponseDTO(
     ) {}
 
     /**
-     * 좌석 목록으로부터 SectionLayoutResponse 생성
-     *
+     * 특정 "구역"의 좌석 목록으로부터 SectionLayoutResponse 생성
      * @param sectionName 구역명
      * @param seats 해당 구역의 좌석 목록
      * @return SectionLayoutResponse 객체
      */
     public static SectionLayoutResponseDTO from(String sectionName, List<SeatDetailResponseDTO> seats) {
-        if (seats.isEmpty()) {
+        if (seats.isEmpty()) { // 특정 구역에서 좌석 목록이 비어있는 경우
             return new SectionLayoutResponseDTO(
                     sectionName,
                     sectionName + "구역",
@@ -67,6 +66,7 @@ public record SectionLayoutResponseDTO(
             );
         }
 
+        // 특정 구역에서 좌석 목록이 존재하는 경우
         // 가격 범위 계산
         BigDecimal minPrice = seats.stream()
                 .map(SeatDetailResponseDTO::price)
@@ -78,12 +78,13 @@ public record SectionLayoutResponseDTO(
                 .max(BigDecimal::compareTo)
                 .orElse(BigDecimal.ZERO);
 
-        // 예매 가능 좌석 수 계산
+        // 예매 가능 좌석 수 계산 (isAvailable())
         int availableSeats = (int) seats.stream()
                 .mapToLong(seat -> seat.isAvailable() ? 1 : 0)
                 .sum();
 
         // 열별 좌석 그룹핑 (프론트엔드에서 배치도 렌더링 시 사용)
+        // 이 메서드 안에서는 같은 구역의 좌석들만 있기 때문에 열만으로 그룹화함
         Map<String, List<SeatDetailResponseDTO>> seatsByRow = seats.stream()
                 .collect(java.util.stream.Collectors.groupingBy(SeatDetailResponseDTO::seatRow));
 
@@ -100,7 +101,6 @@ public record SectionLayoutResponseDTO(
 
     /**
      * 구역명에 따른 설명 생성
-     *
      * @param sectionName 구역명
      * @return 구역 설명
      */

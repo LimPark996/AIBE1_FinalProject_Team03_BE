@@ -32,9 +32,6 @@ public class SeatStatus {
     private LocalDateTime expiresAt;  // 선점 만료 시간
     private String seatInfo;     // 좌석 정보 (A-1, B-15 등)
 
-    /**
-     * 좌석 상태 enum
-     */
     public enum SeatStatusEnum {
         AVAILABLE,    // 예매 가능
         RESERVED,     // 임시 선점 (5분)
@@ -42,61 +39,31 @@ public class SeatStatus {
         UNAVAILABLE   // 예매 불가
     }
 
-    /**
-     * 좌석이 선점 가능한지 확인
-     */
+    // 좌석이 선점 가능한지 확인
     public boolean isAvailable() {
         return status == SeatStatusEnum.AVAILABLE;
     }
 
-    /**
-     * 좌석이 현재 선점 중인지 확인
-     */
+    // 좌석이 현재 선점 중인지 확인
     public boolean isReserved() {
         return status == SeatStatusEnum.RESERVED;
     }
 
-    /**
-     * 좌석 선점이 만료되었는지 확인
-     * 만료된 경우 객체 내부 상태를 일관성 있게 유지하기 위해 읽기 전용 확인만 수행
-     *
-     * 중요: 이 메서드는 상태 변경을 수행하지 않습니다.
-     * 만료된 선점을 처리하려면 SeatStatusService.releaseSeat()을 호출해야 합니다.
-     *
-     * @return 선점이 만료된 경우 true, 그렇지 않은 경우 false
-     */
+    // 좌석 선점이 만료되었는지 확인
+    // 만료된 경우 객체 내부 상태를 일관성 있게 유지하기 위해 읽기 전용 확인만 수행
+    // 중요: 이 메서드는 상태 변경을 수행하지 않습니다.
+    // 만료된 선점을 처리하려면 SeatStatusService.releaseSeat()을 호출해야 합니다.
     public boolean isExpired() {
         return isReserved() && expiresAt != null && LocalDateTime.now().isAfter(expiresAt);
     }
 
-    /**
-     * 선점 만료까지 남은 시간(초) 계산
-     * 만료된 경우 0을 반환
-     *
-     * @return 남은 시간(초), 만료되었거나 선점 상태가 아닌 경우 0
-     */
+    // 선점 만료까지 남은 시간(초) 계산
+    // 만료된 경우(만료된 선점 처리 이후) 0을 반환
     public long getRemainingSeconds() {
         if (!isReserved() || expiresAt == null) {
             return 0L;
         }
-
         long seconds = java.time.Duration.between(LocalDateTime.now(), expiresAt).getSeconds();
         return Math.max(0L, seconds); // 음수 방지
-    }
-
-    /**
-     * 좌석 상태가 유효한지 검증
-     *
-     * @return 상태가 유효한 경우 true
-     */
-    public boolean isValidState() {
-        if (status == SeatStatusEnum.RESERVED) {
-            return userId != null && reservedAt != null && expiresAt != null;
-        } else if (status == SeatStatusEnum.BOOKED) {
-            return userId != null && reservedAt != null;
-        } else if (status == SeatStatusEnum.AVAILABLE) {
-            return userId == null && reservedAt == null && expiresAt == null;
-        }
-        return true; // UNAVAILABLE의 경우 추가 검증 없음
     }
 }

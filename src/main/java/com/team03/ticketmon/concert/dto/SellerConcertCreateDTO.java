@@ -100,40 +100,4 @@ public class SellerConcertCreateDTO {
 		allowableValues = {"SCHEDULED", "ON_SALE", "SOLD_OUT", "CANCELLED"})
 	private ConcertStatus status;
 
-	/**
-	 * 공연 시간 순서 검증
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "종료 시간은 시작 시간보다 늦어야 합니다")
-	public boolean isValidPerformanceTimes() {
-		if (startTime == null || endTime == null) {
-			return true; // @NotNull에서 처리
-		}
-		return endTime.isAfter(startTime);
-	}
-
-	/**
-	 * 예매 시간 순서 검증
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "예매 종료일시는 예매 시작일시보다 늦어야 합니다")
-	public boolean isValidBookingTimes() {
-		if (bookingStartDate == null || bookingEndDate == null) {
-			return true; // @NotNull에서 처리
-		}
-		return bookingEndDate.isAfter(bookingStartDate);
-	}
-
-	/**
-	 * 예매 기간과 공연 날짜 검증
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "예매 종료일시는 공연 시작 전이어야 합니다")
-	public boolean isValidBookingPeriod() {
-		if (bookingEndDate == null || concertDate == null || startTime == null) {
-			return true;
-		}
-		LocalDateTime concertStartDateTime = concertDate.atTime(startTime);
-		return bookingEndDate.isBefore(concertStartDateTime);
-	}
 }

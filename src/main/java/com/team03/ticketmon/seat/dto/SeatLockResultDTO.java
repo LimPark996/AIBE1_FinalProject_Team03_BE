@@ -9,9 +9,7 @@ import java.time.LocalDateTime;
 
 /**
  * 좌석 영구 선점 처리 결과 DTO
- *
  * TTL 삭제 및 영구 선점 상태 변경 작업의 결과를 담는 record 클래스
- *
  * 기능:
  * - 영구 선점 성공/실패 여부
  * - 상태 변경 전후 정보
@@ -80,67 +78,11 @@ public class SeatLockResultDTO {
 
         return String.format(
                 "영구 선점 완료 - 콘서트: %d, 좌석: %d (%s), 사용자: %d, " +
-                        "상태변경: %s→%s, TTL삭제: %s, 소요시간: %dms",
+                        "상태변경: %s→%s, TTL 삭제: %s, 소요시간: %dms",
                 concertId, concertSeatId, seatInfo, userId,
                 previousStatus, newStatus, ttlKeyRemoved ? "성공" : "실패",
                 getProcessingDuration().toMillis()
         );
-    }
-
-    /**
-     * 상태 변경이 올바르게 수행되었는지 확인
-     *
-     * @return 상태 변경이 예상대로 수행되었으면 true
-     */
-    public boolean isStatusChangeValid() {
-        if (!success) {
-            return false;
-        }
-
-        // 일반적인 영구 선점: RESERVED → RESERVED (expiresAt null)
-        // 또는 추후 RESERVED → PERMANENTLY_RESERVED
-        return previousStatus == SeatStatusEnum.RESERVED &&
-                (newStatus == SeatStatusEnum.RESERVED || newStatus == SeatStatusEnum.BOOKED);
-    }
-
-    /**
-     * TTL 처리가 성공했는지 확인
-     *
-     * @return TTL 키 삭제가 성공했거나 이미 존재하지 않았으면 true
-     */
-    public boolean isTTLHandledProperly() {
-        // TTL 키 삭제 성공 또는 키가 존재하지 않았던 경우 모두 정상
-        return success; // 전체 처리가 성공했다면 TTL도 적절히 처리됨
-    }
-
-    /**
-     * 영구 선점 처리가 완전히 성공했는지 확인
-     *
-     * @return 모든 조건이 만족되면 true
-     */
-    public boolean isCompleteSuccess() {
-        return success && isStatusChangeValid() && isTTLHandledProperly();
-    }
-
-    /**
-     * 실패한 영구 선점 결과 생성
-     *
-     * @param concertId 콘서트 ID
-     * @param concertSeatId 좌석 ID
-     * @param userId 사용자 ID
-     * @param errorMessage 오류 메시지
-     * @return 실패 결과
-     */
-    public static SeatLockResultDTO failure(Long concertId, Long concertSeatId, Long userId, String errorMessage) {
-        return SeatLockResultDTO.builder()
-                .concertId(concertId)
-                .concertSeatId(concertSeatId)
-                .userId(userId)
-                .lockStartTime(LocalDateTime.now())
-                .lockEndTime(LocalDateTime.now())
-                .success(false)
-                .errorMessage(errorMessage)
-                .build();
     }
 
     /**

@@ -15,11 +15,6 @@ import java.util.Optional;
 
 /**
  * 좌석 정보 헬퍼 서비스
- * ✅ 수정사항:
- * - ConcertSeatId 기반 조회 메서드 추가
- * - 실제 DB 조회 기능 완전 구현
- * - 성능 최적화: 캐시 적용
- * - 더미 데이터 폴백 지원 (하위 호환성)
  */
 @Slf4j
 @Service
@@ -30,7 +25,7 @@ public class SeatInfoHelper {
     private final ConcertSeatRepository concertSeatRepository;
 
     /**
-     * ✅ 새로운 메서드: ConcertSeat ID 기반 좌석 정보 조회
+     * ConcertSeat ID 기반 좌석 정보 "하나" 조회
      * 컨트롤러에서 ConcertSeat ID를 사용할 때 호출
      *
      * @param concertId 콘서트 ID
@@ -52,14 +47,15 @@ public class SeatInfoHelper {
                         String.format("ConcertSeat을 찾을 수 없습니다. ConcertSeat ID: %d", concertSeatId));
             }
 
+            // ConcertSeat이 Id로 조회가 된다면,
             ConcertSeat concertSeat = concertSeatOpt.get();
 
-            // 콘서트 ID 일치 확인
+            // ConcertSeat 에서 호출한 Concert의 Id(expected)와 Concert 에서 호출한 Id(actual)가 동일한지 확인
             if (!concertSeat.getConcert().getConcertId().equals(concertId)) {
                 log.warn("콘서트 ID 불일치: expected={}, actual={}, concertSeatId={}",
                         concertId, concertSeat.getConcert().getConcertId(), concertSeatId);
                 throw new BusinessException(ErrorCode.SEAT_NOT_FOUND,
-                        "해당 콘서트에 속하지 않는 좌석입니다.");
+                        "해당 콘서트에 속하지 않는 좌석입니다."); // 동일하지 않는 경우 Exception 반환
             }
 
             Seat seat = concertSeat.getSeat();
@@ -73,11 +69,11 @@ public class SeatInfoHelper {
             log.debug("ConcertSeat ID 기반 좌석 정보 조회 성공: concertSeatId={}, seatInfo={}",
                     concertSeatId, seatInfo);
 
-            return seatInfo;
+            return seatInfo; // 좌석 정보 포맷: 구역-열-번호 반환
 
-        } catch (BusinessException e) {
+        } catch (BusinessException e) { // 비즈니스 예외는 그대로 상위로 전달 (메서드 호출 체인을 따라 호출한 쪽으로 예외를 던짐)
             throw e;
-        } catch (Exception e) {
+        } catch (Exception e) { // 예상 못한 기술적 오류는 비즈니스 예외로 변환
             log.error("ConcertSeat ID 기반 좌석 정보 조회 중 오류: concertSeatId={}", concertSeatId, e);
             throw new BusinessException(ErrorCode.SERVER_ERROR,
                     "좌석 정보 조회 중 오류가 발생했습니다.");
@@ -85,13 +81,12 @@ public class SeatInfoHelper {
     }
 
     /**
-     * 더미 데이터 생성 (하위 호환성 + 폴백용)
-     * ⚠️ 추후 삭제될 메서드에서 사용하는 메서드
+     * 더미 데이터 생성
      */
     public String generateDummySeatInfo(int seatNumber) {
         log.debug("더미 좌석 정보 생성: seatNumber={}", seatNumber);
 
-        // 좌석 번호 유효성 검증
+        // 좌석 번호 유효성 검증 (1 ~ 150 까지 번호가 유효함)
         if (seatNumber < 1 || seatNumber > 150) {
             log.error("유효하지 않은 좌석 번호: seatNumber={}", seatNumber);
             throw new IllegalArgumentException(
@@ -116,6 +111,6 @@ public class SeatInfoHelper {
         String seatInfo = String.format("%s-%d", section, seatInSection);
         log.debug("더미 좌석 정보 생성 완료: seatNumber={} -> seatInfo={}", seatNumber, seatInfo);
 
-        return seatInfo;
+        return seatInfo; // 더미 좌석 정보 생성
     }
 }

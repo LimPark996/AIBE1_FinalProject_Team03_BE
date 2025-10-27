@@ -40,7 +40,6 @@ public record SeatDetailResponseDTO(
 
     /**
      * ConcertSeat 엔티티로부터 SeatDetailResponse 생성
-     *
      * @param concertSeat 콘서트 좌석 정보
      * @return SeatDetailResponse 객체
      */

@@ -22,8 +22,6 @@ import java.util.stream.Collectors;
 
 /**
  * 좌석 배치도 관련 비즈니스 로직 서비스
- * 기존 VenueService, ConcertSeatRepository를 활용하여
- * 실제 DB 데이터 기반의 좌석 배치도 정보를 제공
  */
 @Slf4j
 @Service
@@ -34,6 +32,11 @@ public class SeatLayoutService {
     private final ConcertRepository concertRepository;
     private final ConcertSeatRepository concertSeatRepository;
     private final VenueService venueService;
+
+    // ConcertSeat: DB에 저장된 "이 콘서트의 이 좌석" 정보
+    // SeatDetailResponseDTO: 클라이언트에게 보여줄 "좌석 1개"의 정보
+    // SectionLayoutResponseDTO: "A구역" 전체의 통계와 좌석 목록
+    // SeatLayoutResponseDTO: 콘서트 전체의 좌석 배치도
 
     /**
      * 콘서트의 전체 좌석 배치도 조회
@@ -48,27 +51,26 @@ public class SeatLayoutService {
         try {
             // 1. 콘서트 존재 여부 확인
             Concert concert = concertRepository.findById(concertId)
-                    .orElseThrow(() -> {
-                        log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
-                        return new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
-                    });
+                    .orElseThrow(() -> new BusinessException(ErrorCode.CONCERT_NOT_FOUND));
 
             log.debug("콘서트 정보 조회 성공: concertId={}, title={}, venueName={}",
                     concertId, concert.getTitle(), concert.getVenueName());
 
-            // 2. 공연장 정보 조회 (예외 없이 처리)
+            // 2. 공연장 정보 조회 (VenueName 으로 조회)
             VenueDTO venue = venueService.getVenueByName(concert.getVenueName());
             if (venue == null) {
                     log.warn("공연장 정보를 찾을 수 없음: venueName={}, concertId={}", concert.getVenueName(), concertId);
                     log.info("대체 공연장 정보 사용: venueName={}", concert.getVenueName());
                     venue = createFallbackVenueInfo(concert.getVenueName());
-            };
+            }
 
             log.debug("공연장 정보 준비 완료: venueName={}", venue.getName());
 
-            SeatLayoutResponseDTO.VenueInfo venueInfo = SeatLayoutResponseDTO.VenueInfo.from(venue);
+            // venueInfo는 venue를 저장하는 게 아니라, venue 로부터 필요한 데이터만 추출해서 새로 만든 객체
+            SeatLayoutResponseDTO.VenueInfo venueInfo = SeatLayoutResponseDTO.VenueInfo.from(venue); // VenueDTO 에서 공연장 ID와 공연장명을 추출하여 저장한다.
 
-            // 3. 콘서트의 모든 좌석 정보 조회 (Fetch Join으로 최적화됨)
+            // 3. 콘서트의 모든 좌석 정보 조회 (Fetch Join 으로 최적화됨)
+            // Fetch Join은 연관된 엔티티를 한 번의 쿼리로 같이 가져오는 JPA 의 최적화 기법 (N+1 문제 극복)
             List<ConcertSeat> concertSeats = concertSeatRepository.findByConcertIdWithDetails(concertId);
 
             if (concertSeats.isEmpty()) {
@@ -82,7 +84,7 @@ public class SeatLayoutService {
             // 4. 좌석 정보를 DTO로 변환
             List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
                     .map(SeatDetailResponseDTO::from)
-                    .collect(Collectors.toList());
+                    .toList();
 
             // 5. 구역별로 그룹핑
             Map<String, List<SeatDetailResponseDTO>> seatsBySection = seatDetails.stream()
@@ -94,13 +96,13 @@ public class SeatLayoutService {
             log.debug("구역별 그룹핑 완료: concertId={}, 구역수={}, 구역={}",
                     concertId, seatsBySection.size(), seatsBySection.keySet());
 
-            // 6. 구역별 응답 생성 (구역명 기준 정렬)
+            // 6. 구역별 상세 정보 생성 (구역명 기준 정렬)
             List<SectionLayoutResponseDTO> sections = seatsBySection.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey()) // 구역명으로 정렬 (A, B, C, VIP 등)
                     .map(entry -> SectionLayoutResponseDTO.from(entry.getKey(), entry.getValue()))
                     .collect(Collectors.toList());
 
-            // 7. 최종 응답 생성
+            // 7. 전체 좌석 배치도 생성
             SeatLayoutResponseDTO response = SeatLayoutResponseDTO.from(concertId, venueInfo, sections);
 
             log.info("좌석 배치도 조회 완료: concertId={}, 총좌석={}, 구역수={}, 예매가능률={}%",
@@ -123,7 +125,6 @@ public class SeatLayoutService {
 
     /**
      * 특정 구역의 좌석 배치 조회
-     *
      * @param concertId 콘서트 ID
      * @param sectionName 구역명 (A, B, VIP 등)
      * @return 해당 구역의 좌석 배치 정보
@@ -147,7 +148,7 @@ public class SeatLayoutService {
 
             String trimmedSectionName = sectionName.trim();
 
-            // 3. 해당 콘서트의 특정 구역 좌석만 조회
+            // 3. 해당 콘서트의 특정 구역 좌석들만 조회
             List<ConcertSeat> concertSeats = concertSeatRepository.findByConcertIdWithDetails(concertId);
 
             log.debug("전체 좌석 조회 완료: concertId={}, 총 좌석수={}", concertId, concertSeats.size());
@@ -161,7 +162,7 @@ public class SeatLayoutService {
             if (sectionSeats.isEmpty()) {
                 log.warn("해당 구역에 좌석이 없습니다: concertId={}, section={}", concertId, trimmedSectionName);
 
-                // 🔧 사용자 친화적 에러 메시지 (사용 가능한 구역 목록 제공)
+                // 사용자 친화적 에러 메시지 (사용 가능한 구역 목록 제공)
                 List<String> availableSections = concertSeats.stream()
                         .map(cs -> cs.getSeat().getSection())
                         .distinct()

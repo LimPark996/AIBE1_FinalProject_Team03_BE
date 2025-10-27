@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 /**
  * 좌석 상태 변경 이벤트 DTO
- * - Redis Pub/Sub으로 전송되는 메시지 구조
+ * - Redis Pub/Sub 으로 전송되는 메시지 구조
  * - JSON 직렬화/역직렬화를 위한 record 타입 사용
  */
 @Builder

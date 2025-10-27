@@ -2,7 +2,6 @@ package com.team03.ticketmon.concert.dto;
 
 import jakarta.validation.constraints.*;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.team03.ticketmon.concert.domain.enums.ConcertStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -85,71 +84,4 @@ public class SellerConcertUpdateDTO {
 		pattern = "^https?://.*\\.(jpg|jpeg|png|gif|webp)$")
 	private String posterImageUrl;
 
-	/**
-	 * Update DTO 전용: 최소 하나의 필드는 수정되어야 함
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "수정할 항목이 최소 하나는 있어야 합니다")
-	public boolean hasAtLeastOneField() {
-		return title != null || artist != null || description != null ||
-			venueName != null || venueAddress != null || concertDate != null ||
-			startTime != null || endTime != null || totalSeats != null ||
-			bookingStartDate != null || bookingEndDate != null ||
-			minAge != null || status != null ||
-			posterImageUrl != null || maxTicketsPerUser != null;
-	}
-
-	/**
-	 * 상태 변경 유효성 검증
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "유효하지 않은 상태 변경입니다")
-	public boolean isValidStatusChange() {
-		if (status == null) {
-			return true; // 상태 변경하지 않는 경우
-		}
-
-		// 비즈니스 규칙: CANCELLED 상태로만 변경 가능하다고 가정
-		// 실제 비즈니스 규칙에 따라 수정 필요
-		return status == ConcertStatus.CANCELLED ||
-			status == ConcertStatus.SCHEDULED ||
-			status == ConcertStatus.ON_SALE;
-	}
-
-	/**
-	 * 공연 시간 순서 검증 (nullable 고려)
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "종료 시간은 시작 시간보다 늦어야 합니다")
-	public boolean isValidPerformanceTimes() {
-		if (startTime == null || endTime == null) {
-			return true; // null이면 검증 패스 (부분 업데이트 허용)
-		}
-		return endTime.isAfter(startTime);
-	}
-
-	/**
-	 * 예매 시간 순서 검증 (nullable 고려)
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "예매 종료일시는 예매 시작일시보다 늦어야 합니다")
-	public boolean isValidBookingTimes() {
-		if (bookingStartDate == null || bookingEndDate == null) {
-			return true; // null이면 검증 패스 (부분 업데이트 허용)
-		}
-		return bookingEndDate.isAfter(bookingStartDate);
-	}
-
-	/**
-	 * 예매 기간과 공연 날짜 검증 (nullable 고려)
-	 */
-	@JsonIgnore
-	@AssertTrue(message = "예매 종료일시는 공연 시작 전이어야 합니다")
-	public boolean isValidBookingPeriod() {
-		if (bookingEndDate == null || concertDate == null || startTime == null) {
-			return true; // 필요한 값이 없으면 검증 패스
-		}
-		LocalDateTime concertStartDateTime = concertDate.atTime(startTime);
-		return bookingEndDate.isBefore(concertStartDateTime);
-	}
 }

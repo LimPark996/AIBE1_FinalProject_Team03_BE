@@ -45,27 +45,6 @@ public class ConcertSeat {
 	@OneToOne(mappedBy = "concertSeat")
 	private Ticket ticket;
 
-	/**
-	 * ConcertSeat 엔티티를 생성하는 정적 팩토리 메서드
-	 * 콘서트 좌석의 모든 필수 정보를 받아 유효한 객체를 생성하도록 강제
-	 * @param concert 이 좌석이 속할 콘서트
-	 * @param seat 실제 좌석 정보
-	 * @param grade 좌석 등급
-	 * @param price 좌석 가격
-	 * @return 생성된 ConcertSeat 엔티티
-	 */
-	public static ConcertSeat create(Concert concert, Seat seat, SeatGrade grade, BigDecimal price) {
-		if (concert == null || seat == null || grade == null || price == null) {
-			throw new IllegalArgumentException("ConcertSeat 필수 필드는 null일 수 없습니다.");
-		}
-		return new ConcertSeat(null, concert, seat, grade, price, null);
-	}
-
-	/**
-	 * ConcertSeat에 Ticket을 설정하거나 해제하는 메서드
-	 * Ticket과의 양방향 관계를 올바르게 관리하며, 좌석에 이미 티켓이 할당된 경우 중복 할당을 방지
-	 * @param ticket 이 ConcertSeat에 연결될 Ticket 엔티티 (null은 티켓 해제를 의미)
-	 */
 	public void setTicket(Ticket ticket) {
 		if (this.ticket != null && ticket != null && !this.ticket.equals(ticket)) {
 			throw new BusinessException(ErrorCode.SERVER_ERROR, "좌석에 이미 티켓이 할당됨.");
@@ -73,24 +52,16 @@ public class ConcertSeat {
 		this.ticket = ticket;
 	}
 
-	/**
-	 * ConcertSeat에 할당된 Ticket을 해제
-	 * 주로 티켓 취소 시 좌석을 다시 AVAILABLE 상태로 만들기 위해 사용
-	 */
+	// 티켓 취소 시 좌석을 다시 AVAILABLE 상태로 만들기 위해 사용
 	public void releaseTicket() {
 		this.ticket = null;
 	}
 
-	/**
-	 * 좌석 정보를 문자열로 반환
-	 * Redis SeatStatus에서 사용할 seatInfo 생성
-	 * @return 좌석 정보 문자열 (예: "A-1-15", "B-2-20")
-	 */
+	// 좌석 정보를 문자열로 반환
 	public String getSeatInfo() {
 		if (this.seat == null) {
 			return "Unknown";
 		}
-
 		// 좌석 정보 포맷: 구역-열-번호 (A-1-15)
 		return String.format("%s-%s-%d",
 				this.seat.getSection() != null ? this.seat.getSection() : "?",
