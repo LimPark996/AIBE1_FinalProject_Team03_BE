@@ -1,5 +1,14 @@
 # AIBE1-FinalProject-Team03
 
+### (2025.11.07) README.md 최신화
+
+부트캠프에서 발표한 PPT 자료 공유드립니다.
+
+https://www.figma.com/slides/4RZvK5E6tnWw2bQsHqx6H9/Untitled?node-id=1-19&t=fKAZP0N9cTwcIzEB-1
+
+
+
+
 ---
 
 ### (2025.06.24) README.md 최신화
