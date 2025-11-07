@@ -2,12 +2,15 @@
 
 ### (2025.11.07) README.md 최신화
 
+![콘서트티켓예매시스템](https://github.com/user-attachments/assets/a7be3b7c-896d-48f2-9c05-bec7fa2a3f75)
+
+
 부트캠프에서 발표한 PPT 자료 공유드립니다.
+
+https://www.youtube.com/watch?v=8xQauW185lU
 
 https://www.figma.com/slides/4RZvK5E6tnWw2bQsHqx6H9/Untitled?node-id=1-19&t=fKAZP0N9cTwcIzEB-1
 
-
-![콘서트티켓예매시스템](https://github.com/user-attachments/assets/5e60efdb-e53c-427d-8806-e1ca5a79bd26)
 
 
 ---
