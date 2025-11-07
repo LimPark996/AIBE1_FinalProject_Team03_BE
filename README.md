@@ -7,6 +7,7 @@
 https://www.figma.com/slides/4RZvK5E6tnWw2bQsHqx6H9/Untitled?node-id=1-19&t=fKAZP0N9cTwcIzEB-1
 
 
+![콘서트티켓예매시스템](https://github.com/user-attachments/assets/5e60efdb-e53c-427d-8806-e1ca5a79bd26)
 
 
 ---
