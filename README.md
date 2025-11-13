@@ -7,7 +7,7 @@
 
 부트캠프에서 발표한 PPT 자료 공유드립니다.
 
-https://www.youtube.com/watch?v=8xQauW185lU
+[https://www.youtube.com/watch?v=8xQauW185lU](https://www.youtube.com/watch?v=FLgYcKAJM0o)
 
 https://www.figma.com/slides/4RZvK5E6tnWw2bQsHqx6H9/Untitled?node-id=1-19&t=fKAZP0N9cTwcIzEB-1
 
