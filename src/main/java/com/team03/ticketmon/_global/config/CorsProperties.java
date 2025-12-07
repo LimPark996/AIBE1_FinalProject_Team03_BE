@@ -1,5 +1,6 @@
 package com.team03.ticketmon._global.config;
 
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -25,6 +26,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * </pre>
  */
 
+@Data
 @ConfigurationProperties(prefix = "cors")
 public class CorsProperties {
     private String[] allowedOrigins;
