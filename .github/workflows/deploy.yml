@@ -72,7 +72,7 @@ jobs:
               -e SQS_ENDPOINT="${{ secrets.SQS_ENDPOINT }}" \
               -e TOSS_CLIENT_KEY="${{ secrets.TOSS_CLIENT_KEY }}" \
               -e TOSS_SECRET_KEY="${{ secrets.TOSS_SECRET_KEY }}" \
-              -e TOGETHER_API_KEY="${{ secrets.TOGETHER_API_KEY }}" \
+              -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
               -e GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
               -e GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
               -e NAVER_CLIENT_ID="${{ secrets.NAVER_CLIENT_ID }}" \
