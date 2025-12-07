@@ -244,11 +244,12 @@ public class SellerConcertController {
 			- SCHEDULED: 예정됨 (예매 시작 전)
 			- ON_SALE: 예매 중 (현재 구매 가능)
 			- SOLD_OUT: 매진됨
+			- BOOKING_CLOSED: 예매 종료
 			- CANCELLED: 취소됨
 			- COMPLETED: 완료됨
 			""",
 			example = "ON_SALE",
-			schema = @Schema(allowableValues = {"SCHEDULED", "ON_SALE", "SOLD_OUT", "CANCELLED", "COMPLETED"})
+			schema = @Schema(allowableValues = {"SCHEDULED", "ON_SALE", "SOLD_OUT", "BOOKING_CLOSED","CANCELLED", "COMPLETED"})
 		)
 		@RequestParam ConcertStatus status) {
 

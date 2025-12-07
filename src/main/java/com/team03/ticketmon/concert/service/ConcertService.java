@@ -47,6 +47,7 @@ public class ConcertService {
 	private static final List<ConcertStatus> ACTIVE_STATUSES = Arrays.asList(
 		ConcertStatus.SCHEDULED,
 		ConcertStatus.ON_SALE,
+		ConcertStatus.BOOKING_CLOSED,
 		ConcertStatus.SOLD_OUT  // SOLD_OUT은 포함 (매진이지만 여전히 정보 확인 가능)
 	);
 

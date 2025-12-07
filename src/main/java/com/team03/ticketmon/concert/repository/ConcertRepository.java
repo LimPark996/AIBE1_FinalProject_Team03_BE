@@ -24,7 +24,7 @@ public interface ConcertRepository extends JpaRepository<Concert, Long> {
 
 	// 키워드로 콘서트 검색 - COMPLETED/CANCELLED 제외
 	@Query("SELECT c FROM Concert c WHERE " +
-		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT') AND " +
+		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'BOOKING_CLOSED') AND " +
 		"(LOWER(c.title) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
 		"LOWER(c.artist) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
 		"LOWER(c.venueName) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
@@ -33,7 +33,7 @@ public interface ConcertRepository extends JpaRepository<Concert, Long> {
 
 	// 날짜 범위로 콘서트 조회
 	@Query("SELECT c FROM Concert c WHERE " +
-		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT') AND " +
+		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'BOOKING_CLOSED') AND " +
 		"(:startDate IS NULL OR c.concertDate >= :startDate) AND " +
 		"(:endDate IS NULL OR c.concertDate <= :endDate) " +
 		"ORDER BY c.concertDate ASC")
@@ -43,7 +43,7 @@ public interface ConcertRepository extends JpaRepository<Concert, Long> {
 	// 가격 범위로 콘서트 조회
 	@Query("SELECT DISTINCT c FROM Concert c " +
 		"JOIN c.concertSeats cs " +
-		"WHERE c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT') AND " +
+		"WHERE c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'BOOKING_CLOSED') AND " +
 		"(:minPrice IS NULL OR cs.price >= :minPrice) AND " +
 		"(:maxPrice IS NULL OR cs.price <= :maxPrice) " +
 		"ORDER BY c.concertDate ASC")
@@ -53,7 +53,7 @@ public interface ConcertRepository extends JpaRepository<Concert, Long> {
 	// 날짜와 가격 범위로 콘서트 조회 - COMPLETED/CANCELLED 제외
 	@Query("SELECT DISTINCT c FROM Concert c " +
 		"JOIN c.concertSeats cs " +
-		"WHERE c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT') AND " +
+		"WHERE c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'BOOKING_CLOSED') AND " +
 		"(:startDate IS NULL OR c.concertDate >= :startDate) AND " +
 		"(:endDate IS NULL OR c.concertDate <= :endDate) AND " +
 		"(:minPrice IS NULL OR cs.price >= :minPrice) AND " +
@@ -75,12 +75,12 @@ public interface ConcertRepository extends JpaRepository<Concert, Long> {
 
 	// 기본 콘서트 목록 조회 (페이징 + 정렬)
 	@Query("SELECT c FROM Concert c WHERE " +
-		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT')")
+		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'BOOKING_CLOSED')")
 	Page<Concert> findActiveConcerts(Pageable pageable);
 
 	// 기본 콘서트 목록 조회 (페이징 없음, 기본 정렬)
 	@Query("SELECT c FROM Concert c WHERE " +
-		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT') " +
+		"c.status IN ('SCHEDULED', 'ON_SALE', 'SOLD_OUT', 'BOOKING_CLOSED') " +
 		"ORDER BY c.concertDate ASC")
 	List<Concert> findActiveConcerts();
 

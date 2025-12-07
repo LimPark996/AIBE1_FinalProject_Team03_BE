@@ -97,7 +97,7 @@ public class SellerConcertCreateDTO {
 	private String posterImageUrl;
 
 	@Schema(description = "콘서트 상태", example = "SCHEDULED",
-		allowableValues = {"SCHEDULED", "ON_SALE", "SOLD_OUT", "CANCELLED"})
+		allowableValues = {"SCHEDULED", "ON_SALE", "BOOKING_CLOSED", "SOLD_OUT", "CANCELLED"})
 	private ConcertStatus status;
 
 }
