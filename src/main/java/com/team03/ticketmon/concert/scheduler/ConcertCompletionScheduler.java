@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.team03.ticketmon.concert.domain.Concert;
 import com.team03.ticketmon.concert.domain.enums.ConcertStatus;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
-import com.team03.ticketmon.concert.service.ConcertService; // 🔥 추가
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,9 +23,93 @@ public class ConcertCompletionScheduler {
 	private final ConcertRepository concertRepository;
 
 	/**
+	 * 매분 실행하여 예매 시작 시간이 된 콘서트를 ON_SALE로 변경
+	 */
+	@Scheduled(fixedRate = 60000) // 1분마다
+	@Transactional
+	public void openBookingForScheduledConcerts() {
+		log.info("🎫 예매 오픈 스케줄러 시작");
+
+		try {
+			LocalDateTime now = LocalDateTime.now();
+
+			List<Concert> scheduledConcerts = concertRepository
+					.findByStatusInOrderByConcertDateAsc(List.of(ConcertStatus.SCHEDULED));
+
+			int openedCount = 0;
+
+			for (Concert concert : scheduledConcerts) {
+				if (shouldOpenBooking(concert, now)) {
+					concert.setStatus(ConcertStatus.ON_SALE);
+					concertRepository.save(concert);
+					openedCount++;
+
+					log.info("🎉 예매 오픈: ID={}, 제목='{}', SCHEDULED → ON_SALE",
+							concert.getConcertId(), concert.getTitle());
+				}
+			}
+
+			if (openedCount > 0) {
+				log.info("✅ 예매 오픈 완료: {}건", openedCount);
+			}
+		} catch (Exception e) {
+			log.error("❌ 예매 오픈 스케줄러 오류", e);
+		}
+	}
+
+	/**
+	 * 예매를 오픈해야 하는지 판단
+	 */
+	private boolean shouldOpenBooking(Concert concert, LocalDateTime now) {
+		if (concert.getBookingStartDate() == null) {
+			return false;
+		}
+		// 예매 시작 시간이 지났고, 아직 예매 종료 전인 경우
+		boolean afterStart = now.isAfter(concert.getBookingStartDate())
+				|| now.isEqual(concert.getBookingStartDate());
+		boolean beforeEnd = concert.getBookingEndDate() == null
+				|| now.isBefore(concert.getBookingEndDate());
+
+		return afterStart && beforeEnd;
+	}
+
+	/**
+	 * 예매 종료 시간이 지난 콘서트를 BOOKING_CLOSED로 변경
+	 */
+	@Scheduled(fixedRate = 60000)
+	@Transactional
+	public void closeBookingForExpiredConcerts() {
+		log.info("🔒 예매 종료 스케줄러 시작");
+
+		try {
+			LocalDateTime now = LocalDateTime.now();
+
+			List<Concert> onSaleConcerts = concertRepository
+					.findByStatusInOrderByConcertDateAsc(List.of(ConcertStatus.ON_SALE));
+
+			for (Concert concert : onSaleConcerts) {
+				if (shouldCloseBooking(concert, now)) {
+					concert.setStatus(ConcertStatus.BOOKING_CLOSED);
+					concertRepository.save(concert);
+
+					log.info("🔒 예매 종료: ID={}, 제목='{}', ON_SALE → BOOKING_CLOSED",
+							concert.getConcertId(), concert.getTitle());
+				}
+			}
+		} catch (Exception e) {
+			log.error("❌ 예매 종료 스케줄러 오류", e);
+		}
+	}
+
+	private boolean shouldCloseBooking(Concert concert, LocalDateTime now) {
+		return concert.getBookingEndDate() != null
+				&& now.isAfter(concert.getBookingEndDate());
+	}
+
+	/**
 	 * 매시간 실행하여 공연 종료된 콘서트들을 COMPLETED로 변경
 	 */
-	@Scheduled(fixedRate = 3600000) // 1시간마다
+	@Scheduled(fixedRate = 60000) // 1분마다
 	@Transactional
 	public void completeFinishedConcerts() {
 		log.info("🕐 공연 완료 처리 스케줄러 시작");

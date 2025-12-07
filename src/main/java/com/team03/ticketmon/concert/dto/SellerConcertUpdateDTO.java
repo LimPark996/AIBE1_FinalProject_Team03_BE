@@ -76,7 +76,7 @@ public class SellerConcertUpdateDTO {
 	private Integer maxTicketsPerUser;
 
 	@Schema(description = "콘서트 상태", example = "ON_SALE",
-		allowableValues = {"SCHEDULED", "ON_SALE", "SOLD_OUT", "CANCELLED", "COMPLETED"})
+		allowableValues = {"SCHEDULED", "ON_SALE", "BOOKING_CLOSED", "SOLD_OUT", "CANCELLED", "COMPLETED"})
 	private ConcertStatus status;
 
 	@Size(max = 2000, message = "URL이 너무 깁니다")
