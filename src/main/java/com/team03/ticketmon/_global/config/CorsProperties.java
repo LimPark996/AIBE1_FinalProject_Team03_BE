@@ -32,8 +32,4 @@ public class CorsProperties {
     public String[] getAllowedOrigins() {
         return allowedOrigins;
     }
-
-    public void setAllowedOrigins(String[] allowedOrigins) {
-        this.allowedOrigins = allowedOrigins;
-    }
 }

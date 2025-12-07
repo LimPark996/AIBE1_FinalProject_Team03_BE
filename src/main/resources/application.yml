@@ -63,7 +63,7 @@ spring:
       max-file-size: 11MB  # 단일 파일 최대 크기
       max-request-size: 11MB # 요청 전체의 최대 크기 (일반적으로 동일하게 설정)
 
-    # ✅ 새로 추가: 스케줄러 설정 - [좌석 관리 및 예매 모듈]
+    # 스케줄러 설정 - [좌석 관리 및 예매 모듈]
   task:
     scheduling:
       enabled: true  # 스케줄러 활성화 (기본값: true)
@@ -102,15 +102,14 @@ toss:
 
 ai:
   together:
-    api-key: ${AI_API_KEY}
+    api-key: ${OPENAI_API_KEY}
     api-url: "https://api.together.xyz/v1/chat/completions"
-    model: "meta-llama/Llama-3.3-70B-Instruct-Turbo"
-    timeout-seconds: 120
-    max-retries: 3
-    max-tokens-per-request: 4000
-    max-reviews-per-request: 50
-    chars-per-token: 2.5
-    token-safety-margin: 0.2
+    chat:
+      options:
+        model: gpt-4o-mini          # 저렴하고 빠름
+        temperature: 0.7
+        max-tokens: 700
+      timeout: 120s                  # 기본 타임아웃
 
   summary:
     condition:
@@ -119,3 +118,11 @@ ai:
       significant-count-change-ratio: 0.2
       update-on-any-content-change: true
       max-update-interval-hours: 168
+
+    system-prompt: |
+      You are a concert review summarizer. Write in Korean using markdown format.
+      Structure:
+      ### 전체 평가: (3-4 sentences)
+      ## 좋은 점: (3-4 sentences)
+      ## 아쉬운 점: (3-4 sentences)
+      Keep it concise and practical.

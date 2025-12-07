@@ -12,5 +12,5 @@ public class AiSummaryConditionProperties {
 	private Integer significantCountChange = 3;
 	private Double significantCountChangeRatio = 0.2;
 	private Boolean updateOnAnyContentChange = true;
-	private Long maxUpdateIntervalHours = 168L;
+	private Long maxUpdateIntervalHours = 1L;
 }

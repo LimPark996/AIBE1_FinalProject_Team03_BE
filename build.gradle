@@ -21,12 +21,18 @@ configurations {
 
 repositories {
     mavenCentral()
+
+    maven { url 'https://repo.spring.io/milestone' }
+
     maven {
         name = "SupabasePackages"
         url = uri("https://maven.pkg.github.com/supabase-community/storage-java")
         credentials {
             username = project.findProperty("gpr.user") ?: System.getenv("GH_PACKAGES_USER")
             password = project.findProperty("gpr.key") ?: System.getenv("GH_PACKAGES_TOKEN")
+        }
+        content {
+            includeGroup("io.supabase")
         }
     }
 }
@@ -73,8 +79,7 @@ dependencies {
     // java.time.LocalDate -> Could not write JSON 문제 해결
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
-    // HttpClientConfig -> HttpClientConfig.restTemplate() 메서드 실행
-    implementation 'org.apache.httpcomponents.client5:httpclient5'
+    implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter:1.0.0-M6'
 
     // JWT, OAuth2 추가
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'

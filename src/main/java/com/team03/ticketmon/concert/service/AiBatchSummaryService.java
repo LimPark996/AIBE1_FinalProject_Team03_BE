@@ -58,7 +58,7 @@ public class AiBatchSummaryService {
 	 *
 	 * @return 배치 처리 결과 DTO
 	 */
-	@Scheduled(cron = "0 */20 * * * *") //개발용: 20분 간격으로 스케줄러 설정
+	@Scheduled(cron = "0 */10 * * * *") //개발용: 20분 간격으로 스케줄러 설정
 	public AiBatchSummaryResultDTO processBatch() {
 		log.info("AI 배치 요약 처리 시작");
 

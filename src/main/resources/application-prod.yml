@@ -147,11 +147,11 @@ toss:
 # 🤖 Together AI API 설정
 ai:
   together:
-    api-key: ${TOGETHER_API_KEY} # 환경 변수에서 주입
-    api-url: https://api.together.xyz/v1/chat/completions
-    model: meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
-    timeout-seconds: 30
-    max-retries: 3
+    api-key: ${OPENAI_API_KEY} # 환경 변수에서 주입
+    chat:
+      options:
+        model: gpt-4o-mini
+      timeout: 30s                   # 운영은 짧게
 
 # 🌍 CORS 설정
 cors:
