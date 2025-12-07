@@ -54,7 +54,7 @@ jobs:
             # 모든 -e 옵션의 값을 따옴표로 감싸서 쉘 문법 오류 방지
             docker run -d \
               --name ticketmon-backend \
-              -p 80:8080 \
+              -p 8080:8080 \
               -e SPRING_PROFILES_ACTIVE=prod \
               -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
               -e DB_URL="${{ secrets.DB_URL }}" \
