@@ -85,14 +85,6 @@ spring:
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
-  # 🤖 OPENAI API 설정
-  ai:
-    openai:
-      api-key: ${OPENAI_API_KEY} # 환경 변수에서 주입
-      chat:
-        options:
-          model: gpt-4o-mini
-        timeout: 30s                   # 운영은 짧게
 
 # 🌐 운영환경 도메인 설정 (CloudFront CDN)
 app:
@@ -160,3 +152,12 @@ cors:
 onesignal:
   app-id: ${ONESIGNAL_APP_ID}        # 운영 환경에서 환경 변수로 관리
   api-key: ${ONESIGNAL_API_KEY}
+
+# 🤖 OPENAI API 설정
+ai:
+  openai:
+    api-key: ${OPENAI_API_KEY} # 환경 변수에서 주입
+    chat:
+      options:
+        model: gpt-4o-mini
+      timeout: 30s                   # 운영은 짧게
