@@ -148,14 +148,14 @@ public class SeatLayoutService {
 
             String trimmedSectionName = sectionName.trim();
 
-            // 3. 해당 콘서트의 특정 구역 좌석들만 조회
+            // 3. 해당 콘서트의 모든 구역의 모든 좌석을 DB 에서 가져옴
             List<ConcertSeat> concertSeats = concertSeatRepository.findByConcertIdWithDetails(concertId);
 
             log.debug("전체 좌석 조회 완료: concertId={}, 총 좌석수={}", concertId, concertSeats.size());
 
             // 4. 특정 구역 필터링 (대소문자 무시)
             List<SeatDetailResponseDTO> sectionSeats = concertSeats.stream()
-                    .filter(cs -> trimmedSectionName.equalsIgnoreCase(cs.getSeat().getSection()))
+                    .filter(cs -> trimmedSectionName.equalsIgnoreCase(cs.getSeat().getSection())) // filter: 원하는 구역만 걸러내기
                     .map(SeatDetailResponseDTO::from)
                     .collect(Collectors.toList());
 
