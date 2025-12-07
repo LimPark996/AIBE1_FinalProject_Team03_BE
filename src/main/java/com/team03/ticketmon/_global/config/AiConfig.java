@@ -10,7 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 @RequiredArgsConstructor
 public class AiConfig {
 
-    @Value("${ai.summary.system-prompt}")
+    @Value("${spring.ai.summary.system-prompt}")
     private String systemPrompt;
 
     @Bean
