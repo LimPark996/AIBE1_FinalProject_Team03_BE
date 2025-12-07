@@ -76,6 +76,32 @@ spring:
         max-size: 20      # 비동기 작업 스레드 풀 최대 크기
         queue-capacity: 500  # 대기 큐 크기
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: gpt-4o-mini          # 저렴하고 빠름
+          temperature: 0.7
+          max-tokens: 700
+        timeout: 120s                  # 기본 타임아웃
+
+    summary:
+      condition:
+        min-review-count: 10
+        significant-count-change: 3
+        significant-count-change-ratio: 0.2
+        update-on-any-content-change: true
+        max-update-interval-hours: 168
+
+      system-prompt: |
+        You are a concert review summarizer. Write in Korean using markdown format.
+        Structure:
+        ### 전체 평가: (3-4 sentences)
+        ## 좋은 점: (3-4 sentences)
+        ## 아쉬운 점: (3-4 sentences)
+        Keep it concise and practical.
+
 server:
   port: ${SERVER_PORT:8080}  # .env에서 설정한 포트 사용, 기본은 8080
     #  ssl:
@@ -99,29 +125,3 @@ toss:
   api:
     url: https://api.tosspayments.com/v1/payments/ # 토스페이먼츠 API의 기본 경로
     confirm-url: ${toss.api.url}confirm # 결제 승인 API 엔드포인트 (${toss.api.url} 재사용)
-
-ai:
-  openai:
-    api-key: ${OPENAI_API_KEY}
-    chat:
-      options:
-        model: gpt-4o-mini          # 저렴하고 빠름
-        temperature: 0.7
-        max-tokens: 700
-      timeout: 120s                  # 기본 타임아웃
-
-  summary:
-    condition:
-      min-review-count: 10
-      significant-count-change: 3
-      significant-count-change-ratio: 0.2
-      update-on-any-content-change: true
-      max-update-interval-hours: 168
-
-    system-prompt: |
-      You are a concert review summarizer. Write in Korean using markdown format.
-      Structure:
-      ### 전체 평가: (3-4 sentences)
-      ## 좋은 점: (3-4 sentences)
-      ## 아쉬운 점: (3-4 sentences)
-      Keep it concise and practical.
