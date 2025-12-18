@@ -3,12 +3,7 @@ package com.team03.ticketmon.concert.domain;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.Setter;
-import lombok.ToString;
+import lombok.*;
 
 import com.team03.ticketmon._global.entity.BaseTimeEntity;
 
@@ -20,6 +15,7 @@ import com.team03.ticketmon._global.entity.BaseTimeEntity;
 @Entity
 @Getter
 @Setter
+@Builder
 @Table(name = "reviews")
 @ToString(exclude = {"concert"})
 @EqualsAndHashCode(of = "id", callSuper = false)

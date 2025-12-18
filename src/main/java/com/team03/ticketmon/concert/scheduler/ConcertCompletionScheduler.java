@@ -4,6 +4,10 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 
+import com.team03.ticketmon.batch.domain.BatchExecutionLog;
+import com.team03.ticketmon.batch.domain.BatchStatus;
+import com.team03.ticketmon.batch.repository.BatchExecutionLogRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +26,20 @@ public class ConcertCompletionScheduler {
 
 	private final ConcertRepository concertRepository;
 
+	@Autowired
+	private BatchExecutionLogRepository batchLogRepository;
+
 	/**
 	 * 매분 실행하여 예매 시작 시간이 된 콘서트를 ON_SALE로 변경
 	 */
 	@Scheduled(fixedRate = 60000) // 1분마다
 	@Transactional
 	public void openBookingForScheduledConcerts() {
-		log.info("🎫 예매 오픈 스케줄러 시작");
+		long startTime = System.currentTimeMillis();
+		BatchExecutionLog batchLog = BatchExecutionLog.builder()
+				.jobName("CONCERT_OPEN")
+				.startedAt(LocalDateTime.now())
+				.build();
 
 		try {
 			LocalDateTime now = LocalDateTime.now();
@@ -49,11 +60,22 @@ public class ConcertCompletionScheduler {
 				}
 			}
 
+			batchLog.setTotalCount(scheduledConcerts.size());
+			batchLog.setSuccessCount(openedCount);
+			batchLog.setStatus(BatchStatus.SUCCESS);
+
 			if (openedCount > 0) {
 				log.info("✅ 예매 오픈 완료: {}건", openedCount);
 			}
 		} catch (Exception e) {
+			batchLog.setStatus(BatchStatus.FAIL);
+			batchLog.setErrorMessage(e.getMessage());
 			log.error("❌ 예매 오픈 스케줄러 오류", e);
+
+		} finally {
+			batchLog.setFinishedAt(LocalDateTime.now());
+			batchLog.setDurationMs(System.currentTimeMillis() - startTime);
+			batchLogRepository.save(batchLog);
 		}
 	}
 

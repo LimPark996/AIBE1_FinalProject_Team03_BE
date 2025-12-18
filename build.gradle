@@ -74,6 +74,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webflux:3.4.5'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'com.h2database:h2'
+
     // Spring AI - 이게 핵심!
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
 

@@ -1,0 +1,90 @@
+spring:
+  autoconfigure:
+    exclude:
+      - io.awspring.cloud.autoconfigure.s3.S3AutoConfiguration
+      - io.awspring.cloud.autoconfigure.core.AwsAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration
+
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  data:
+    redis:
+      repositories:
+        enabled: false
+      host: localhost
+      port: 6379
+      username: ""   # 빈 문자열로 명시!
+      password: ""   # 빈 문자열로 명시!
+      ssl:
+        enabled: false
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-google-id
+            client-secret: test-google-secret
+          naver:
+            client-id: test-naver-id
+            client-secret: test-naver-secret
+          kakao:
+            client-id: test-kakao-id
+            client-secret: test-kakao-secret
+
+  ai:
+    openai:
+      api-key: test-api-key
+
+jwt:
+  secret: testsecrettestsecrettestsecrettestsecret
+  access-expiration-ms: 600000
+  refresh-expiration-ms: 86400000
+
+toss:
+  client-key: test-client-key
+  secret-key: test-secret-key
+  api:
+    url: https://test.api.com/
+    confirm-url: https://test.api.com/confirm
+
+aws:
+  sqs:
+    endpoint: http://localhost:4566
+    access-key: test
+    secret-key: test
+
+cloud:
+  aws:
+    credentials:
+      access-key: test
+      secret-key: test
+    region:
+      static: ap-northeast-2
+    s3:
+      bucket: test-bucket
+
+onesignal:
+  app-id: test-app-id
+  api-key: test-api-key
+
+app:
+  base-url: http://localhost:8080
+  front-base-url: http://localhost:3000
+
+seat:
+  scheduler:
+    seat-cache-warmup:
+      enabled: false
+    waiting-queue:
+      enabled: false

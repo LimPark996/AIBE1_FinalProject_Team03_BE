@@ -3,6 +3,9 @@ package com.team03.ticketmon.concert.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.team03.ticketmon.batch.domain.BatchExecutionLog;
+import com.team03.ticketmon.batch.domain.BatchStatus;
+import com.team03.ticketmon.batch.repository.BatchExecutionLogRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -53,13 +56,17 @@ public class AiBatchSummaryService {
 	@Autowired
 	private AiSummaryConditionProperties conditionProperties;
 
-	/**
-	 * 🕒 매일 새벽 2시에 AI 배치 요약 처리 실행
-	 *
-	 * @return 배치 처리 결과 DTO
-	 */
+	@Autowired
+	private BatchExecutionLogRepository batchLogRepository;
+
 	@Scheduled(cron = "0 */10 * * * *") //개발용: 20분 간격으로 스케줄러 설정
 	public AiBatchSummaryResultDTO processBatch() {
+		long startTime = System.currentTimeMillis();
+		BatchExecutionLog batchLog = BatchExecutionLog.builder()
+				.jobName("AI_SUMMARY")
+				.startedAt(LocalDateTime.now())
+				.build();
+
 		log.info("AI 배치 요약 처리 시작");
 
 		try {
@@ -73,6 +80,7 @@ public class AiBatchSummaryService {
 			// 2단계: 후보군 정밀 검사 및 처리
 			int successCount = 0;
 			int failCount = 0;
+			int skipCount = 0;
 
 			for (Concert concert : candidateConcerts) {
 				try {
@@ -86,37 +94,45 @@ public class AiBatchSummaryService {
 						log.info("AI 요약 처리 성공: concertId={}", concert.getConcertId());
 					} else {
 						// 2-3. 처리 스킵 (조건 미충족)
-						log.debug("AI 요약 처리 스킵: concertId={}, 이유={}",
-							concert.getConcertId(), detection.getChangeReason());
+						skipCount++;
+						log.debug("AI 요약 처리 스킵: concertId={}",
+							concert.getConcertId());
 					}
 
 				} catch (BusinessException e) {
 					// 비즈니스 예외는 예상된 상황으로 간주하고 실패 처리
 					failCount++;
 					handleAiSummaryFailure(concert, e);
-					log.warn("AI 요약 처리 비즈니스 실패: concertId={}, 에러코드={}, 메시지={}",
-						concert.getConcertId(), e.getErrorCode().getCode(), e.getMessage());
-
 				} catch (Exception e) {
 					// 예상치 못한 시스템 오류
 					failCount++;
 					handleAiSummaryFailure(concert, e);
-					log.error("AI 요약 처리 시스템 실패: concertId={}, 오류={}",
-						concert.getConcertId(), e.getMessage(), e);
 				}
 			}
 
-			log.info("AI 배치 요약 처리 완료 - 전체: {}, 성공: {}, 실패: {}",
-				candidateConcerts.size(), successCount, failCount);
+			// 배치 로그 저장
+			batchLog.setTotalCount(candidateConcerts.size());
+			batchLog.setSuccessCount(successCount);
+			batchLog.setFailCount(failCount);
+			batchLog.setSkipCount(skipCount);
+			batchLog.setStatus(failCount > 0 ? BatchStatus.PARTIAL_FAIL : BatchStatus.SUCCESS);
+
+			log.info("AI 배치 요약 처리 완료 - 전체: {}, 성공: {}, 스킵: {}, 실패: {}",
+				candidateConcerts.size(), successCount, skipCount, failCount);
 
 			return new AiBatchSummaryResultDTO(
 				candidateConcerts.size(), successCount, failCount, LocalDateTime.now());
 
 		} catch (Exception e) {
-			// 배치 프로세스 자체의 치명적 오류
+			batchLog.setStatus(BatchStatus.FAIL);
+			batchLog.setErrorMessage(e.getMessage());
 			log.error("AI 배치 요약 처리 중 치명적 오류 발생", e);
 			throw new BusinessException(ErrorCode.SERVER_ERROR,
 				"AI 배치 요약 처리 중 시스템 오류가 발생했습니다.");
+		} finally {
+			batchLog.setFinishedAt(LocalDateTime.now());
+			batchLog.setDurationMs(System.currentTimeMillis() - startTime);
+			batchLogRepository.save(batchLog);
 		}
 	}
 
