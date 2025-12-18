@@ -19,25 +19,20 @@ configurations {
     }
 }
 
-def useSupabase = project.findProperty("useSupabase") != "false"
-
 repositories {
     mavenCentral()
+
     maven { url 'https://repo.spring.io/milestone' }
 
-    if (useSupabase) {
-        maven {
-            name = "SupabasePackages"
-            url = uri("https://maven.pkg.github.com/supabase-community/storage-java")
-            credentials {
-                def user = project.findProperty("gpr.user")
-                def key = project.findProperty("gpr.key")
-                username = (user && !user.isEmpty()) ? user : System.getenv("GH_PACKAGES_USER")
-                password = (key && !key.isEmpty()) ? key : System.getenv("GH_PACKAGES_TOKEN")
-            }
-            content {
-                includeGroup("io.supabase")
-            }
+    maven {
+        name = "SupabasePackages"
+        url = uri("https://maven.pkg.github.com/supabase-community/storage-java")
+        credentials {
+            username = project.findProperty("gpr.user") ?: System.getenv("GH_PACKAGES_USER")
+            password = project.findProperty("gpr.key") ?: System.getenv("GH_PACKAGES_TOKEN")
+        }
+        content {
+            includeGroup("io.supabase")
         }
     }
 }
@@ -57,11 +52,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.9'
-
-    if (useSupabase) {
-        implementation "io.supabase:storage-java:1.1.0"
-    }
-
+    implementation "io.supabase:storage-java:1.1.0"
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-s3:3.4.0'
     implementation 'io.github.cdimascio:dotenv-java:3.2.0'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'

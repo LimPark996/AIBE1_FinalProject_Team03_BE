@@ -39,8 +39,8 @@ jobs:
           echo "::add-mask::${{ secrets.GH_PACKAGES_TOKEN }}"
           echo "GH_PACKAGES_TOKEN=${{ secrets.GH_PACKAGES_TOKEN }}" >> $GITHUB_ENV
 
-      - name: Build with Gradle (Excluding Tests)
-        run: ./gradlew build -x test -PuseSupabase=false
+      - name: Build with Gradle (Excluding Tests) # 테스트 제외하고 빌드만 수행하도록 명령 변경
+        run: ./gradlew build -x test # '-x test' 옵션으로 테스트 태스크 제외
 
       - name: Set up Docker Buildx # Docker Buildx 설정 (Docker 빌드 성능 향상)
         uses: docker/setup-buildx-action@v3
