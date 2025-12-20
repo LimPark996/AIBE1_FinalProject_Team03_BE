@@ -39,10 +39,22 @@ public record SeatLayoutResponseDTO(
             Long venueId,
 
             @Schema(description = "공연장명", example = "올림픽공원 체조경기장")
-            String venueName
+            String venueName,
+
+            @Schema(description = "공연장 수용 인원", example = "15000")
+                    Integer capacity,
+
+            @Schema(description = "공연장 규모 타입", example = "LARGE",
+                    allowableValues = {"LARGE", "MEDIUM", "SMALL"})
+            String capacityType
     ) {
-        public static VenueInfo from(VenueDTO venue) {
-            return new VenueInfo(venue.getVenueId(), venue.getName());
+        public static VenueInfo from(VenueDTO venue, String capacityType) {
+            return new VenueInfo(
+                    venue.getVenueId(),
+                    venue.getName(),
+                    venue.getCapacity(),
+                    capacityType
+            );
         }
     }
 

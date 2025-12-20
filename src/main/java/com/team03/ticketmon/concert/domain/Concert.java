@@ -66,6 +66,10 @@ public class Concert extends BaseTimeEntity {
 	@Column(name = "venue_address", columnDefinition = "TEXT")
 	private String venueAddress;
 
+	@Column(name = "venue_capacity_type", length = 20, nullable = false)
+	@Builder.Default
+	private String venueCapacityType = "MEDIUM";  // 기본값 MEDIUM
+
 	@Column(name = "concert_date", nullable = false)
 	private LocalDate concertDate;
 

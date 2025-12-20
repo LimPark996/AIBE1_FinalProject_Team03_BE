@@ -14,9 +14,11 @@ import lombok.NoArgsConstructor;
 public class VenueDTO {
     private Long venueId;
     private String name;
+    private Integer capacity;
 
     public VenueDTO(Venue venue) {
         this.venueId = venue.getVenueId();
         this.name = venue.getName();
+        this.capacity = venue.getCapacity();
     }
 }

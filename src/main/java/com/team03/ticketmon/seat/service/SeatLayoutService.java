@@ -67,7 +67,8 @@ public class SeatLayoutService {
             log.debug("공연장 정보 준비 완료: venueName={}", venue.getName());
 
             // venueInfo는 venue를 저장하는 게 아니라, venue 로부터 필요한 데이터만 추출해서 새로 만든 객체
-            SeatLayoutResponseDTO.VenueInfo venueInfo = SeatLayoutResponseDTO.VenueInfo.from(venue); // VenueDTO 에서 공연장 ID와 공연장명을 추출하여 저장한다.
+            String capacityType = concert.getVenueCapacityType();
+            SeatLayoutResponseDTO.VenueInfo venueInfo = SeatLayoutResponseDTO.VenueInfo.from(venue, capacityType);
 
             // 3. 콘서트의 모든 좌석 정보 조회 (Fetch Join 으로 최적화됨)
             // Fetch Join은 연관된 엔티티를 한 번의 쿼리로 같이 가져오는 JPA 의 최적화 기법 (N+1 문제 극복)
