@@ -132,12 +132,12 @@ docker-compose up -d
 
 | 이름 | GitHub | 역할 |
 |------|--------|------|
-| 박유미 | [@LimPark996](https://github.com/LimPark996) | AI 리뷰 요약, 콘서트/판매자 관리 |
-| 서희수 | [@hsu-git](https://github.com/hsu-git) | 인프라(운영/개발 환경), 관리자 |
-| 손주영 | [@Juyoung8563](https://github.com/Juyoung8563) | 좌석 및 예매 |
-| 유승남 | [@usn757](https://github.com/usn757) | 좌석, 대기열, 예매 |
-| 이원규 | [@bitamin707](https://github.com/bitamin707) | 회원가입/로그인, 티켓 관리 |
-| 이의선 | [@uiseon98](https://github.com/uiseon98) | 예매 및 결제 |
+| 박유미 | [@LimPark996](https://github.com/LimPark996) | AI 리뷰 요약, 콘서트/판매자 페이지 파트 |
+| 서희수 | [@hsu-git](https://github.com/hsu-git) | 인프라(운영/개발 환경), 관리자 페이지 파트 |
+| 손주영 | [@Juyoung8563](https://github.com/Juyoung8563) | 좌석 및 예매 파트 |
+| 유승남 | [@usn757](https://github.com/usn757) | 좌석, 대기열, 예매 파트 |
+| 이원규 | [@bitamin707](https://github.com/bitamin707) | 회원가입/로그인, 티켓 관리 파트 |
+| 이의선 | [@uiseon98](https://github.com/uiseon98) | 예매 및 결제 전체 파트 |
 
 ---
 
