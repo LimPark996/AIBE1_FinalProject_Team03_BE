@@ -98,15 +98,20 @@
 
 ```
 src/main/java/com/team03/ticketmon/
-├── concert/          # 콘서트 관리 ⭐
-├── seller/           # 판매자 관리 ⭐
-├── review/           # 리뷰 & AI 요약 ⭐
-├── seat/             # 좌석 선점/상태 관리
-├── booking/          # 예매 처리
-├── payment/          # 결제 연동
-├── queue/            # 대기열 시스템
-├── auth/             # 인증/인가 (JWT, OAuth2)
-└── _global/          # 공통 설정, 예외 처리
+├── _global/              # 공통 설정, 예외 처리
+├── admin/                # 관리자 기능
+├── auth/                 # 인증/인가 (JWT, OAuth2)
+├── batch/                # 배치 처리
+├── booking/              # 예매 처리
+├── concert/              # 콘서트 관리 ⭐
+├── notification/         # 알림 서비스
+├── payment/              # 결제 연동
+├── queue/                # 대기열 시스템
+├── seat/                 # 좌석 선점/상태 관리
+├── seller_application/   # 판매자 신청 관리 ⭐
+├── user/                 # 사용자 관리
+├── venue/                # 공연장 관리 ⭐
+└── websocket/            # 웹소켓 통신
 ```
 
 ---
