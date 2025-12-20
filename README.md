@@ -148,5 +148,4 @@ docker-compose up -d
 
 ## 📎 관련 링크
 
-- [Frontend Repository](https://github.com/AIBE-3Team/AIBE1_FinalProject_Team03_FE)
-- [API Documentation (Swagger)](http://localhost:8080/swagger-ui/index.html)
+- [Frontend Repository](https://github.com/LimPark996/Ticketing-Website_FE)
