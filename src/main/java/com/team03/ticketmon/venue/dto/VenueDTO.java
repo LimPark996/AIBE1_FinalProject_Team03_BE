@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 공연장 정보 전송을 위한 DTO(Data Transfer Object)들을 담는 클래스
+ * 공연장 정보 전송을 위한 DTO(Data Transfer Object)들을 담은 클래스
  */
 @Getter
 @NoArgsConstructor
