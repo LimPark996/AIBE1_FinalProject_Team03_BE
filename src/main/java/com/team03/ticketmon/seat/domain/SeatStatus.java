@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.redis.core.RedisHash;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -31,6 +32,10 @@ public class SeatStatus {
     private LocalDateTime reservedAt; // 선점 시간
     private LocalDateTime expiresAt;  // 선점 만료 시간
     private String seatInfo;     // 좌석 정보 (A-1, B-15 등)
+    private String grade;
+    private BigDecimal price;
+    private String seatRow;
+    private Integer seatNumber;
 
     public enum SeatStatusEnum {
         AVAILABLE,    // 예매 가능

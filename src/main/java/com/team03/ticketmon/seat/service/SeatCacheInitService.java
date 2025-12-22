@@ -91,6 +91,10 @@ public class SeatCacheInitService {
                             .reservedAt(null)
                             .expiresAt(null)
                             .seatInfo(seatInfo)
+                            .grade(concertSeat.getGrade().name())
+                            .price(concertSeat.getPrice())
+                            .seatRow(seat.getSeatRow())
+                            .seatNumber(seat.getSeatNumber())
                             .build();
 
                     // 8. 수정된 키 사용 (ConcertSeat ID로 저장)
