@@ -125,6 +125,9 @@ public class SecurityConfig {
                                 .requestMatchers(HttpMethod.GET, "/api/concerts/{id}/reviews").permitAll() // 리뷰 목록 조회
                                 .requestMatchers(HttpMethod.GET, "/api/concerts/{id}/expectations").permitAll() // 기대평 목록 조회
 
+                                // 특정 콘서트 좌석 캐시 삭제
+                                .requestMatchers(HttpMethod.DELETE, "/api/concerts/*/seat-cache").permitAll()
+
                                 // 결제 콜백 및 웹훅 API (외부 시스템에서 호출하므로 permitAll)
                                 .requestMatchers("/api/v1/payments/success", "/api/v1/payments/fail").permitAll()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/toss/payment-updates").permitAll()
