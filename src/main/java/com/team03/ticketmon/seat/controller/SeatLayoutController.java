@@ -3,6 +3,7 @@ package com.team03.ticketmon.seat.controller;
 import com.team03.ticketmon._global.exception.SuccessResponse;
 import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
 import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
+import com.team03.ticketmon.seat.service.SeatCacheInitService;
 import com.team03.ticketmon.seat.service.SeatLayoutService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 public class SeatLayoutController {
 
     private final SeatLayoutService seatLayoutService;
+    private final SeatCacheInitService seatCacheInitService;
 
     /**
      * 콘서트 전체 좌석 배치도 조회
@@ -319,5 +321,12 @@ public class SeatLayoutController {
             return ResponseEntity.status(500)
                     .body(SuccessResponse.of("좌석 배치도 요약 조회 중 오류가 발생했습니다", null));
         }
+    }
+
+    @DeleteMapping("/{concertId}/seat-cache")
+    public ResponseEntity<SuccessResponse<String>> clearSeatCache(
+            @PathVariable Long concertId) {
+        String result = seatCacheInitService.clearSeatCache(concertId);
+        return ResponseEntity.ok(SuccessResponse.of(result, null));
     }
 }
