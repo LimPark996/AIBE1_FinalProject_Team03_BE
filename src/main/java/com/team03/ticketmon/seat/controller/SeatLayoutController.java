@@ -2,7 +2,7 @@ package com.team03.ticketmon.seat.controller;
 
 import com.team03.ticketmon._global.exception.SuccessResponse;
 import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
-import com.team03.ticketmon.seat.dto.SectionLayoutResponseDTO;
+import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
 import com.team03.ticketmon.seat.service.SeatLayoutService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -254,27 +254,27 @@ public class SeatLayoutController {
                     )
             )
     })
-    @GetMapping("/{concertId}/seat-layout/sections/{sectionName}")
-    public ResponseEntity<SuccessResponse<SectionLayoutResponseDTO>> getSectionLayout(
+    @GetMapping("/{concertId}/seat-layout/grades/{gradeName}")
+    public ResponseEntity<SuccessResponse<GradeLayoutResponseDTO>> getGradeLayout(
             @Parameter(description = "콘서트 ID", example = "1")
             @PathVariable Long concertId,
-            @Parameter(description = "구역명", example = "A")
-            @PathVariable String sectionName) {
+            @Parameter(description = "등급명", example = "A")
+            @PathVariable String gradeName) {
 
         try {
-            log.info("구역별 좌석 배치도 조회 요청: concertId={}, section={}", concertId, sectionName);
+            log.info("등급별 좌석 배치도 조회 요청: concertId={}, grade={}", concertId, gradeName);
 
-            SectionLayoutResponseDTO sectionLayout = seatLayoutService.getSectionLayout(concertId, sectionName);
+            GradeLayoutResponseDTO gradeLayout = seatLayoutService.getGradeLayout(concertId, gradeName);
 
-            log.info("구역별 좌석 배치도 조회 성공: concertId={}, section={}, 좌석수={}",
-                    concertId, sectionName, sectionLayout.totalSeats());
+            log.info("등급별 좌석 배치도 조회 성공: concertId={}, grade={}, 좌석수={}",
+                    concertId, gradeName, gradeLayout.totalSeats());
 
-            return ResponseEntity.ok(SuccessResponse.of("구역별 좌석 배치도 조회 성공", sectionLayout));
+            return ResponseEntity.ok(SuccessResponse.of("등급별 좌석 배치도 조회 성공", gradeLayout));
 
         } catch (Exception e) {
-            log.error("구역별 좌석 배치도 조회 중 오류: concertId={}, section={}", concertId, sectionName, e);
+            log.error("등급별 좌석 배치도 조회 중 오류: concertId={}, grade={}", concertId, gradeName, e);
             return ResponseEntity.status(500)
-                    .body(SuccessResponse.of("구역별 좌석 배치도 조회 중 오류가 발생했습니다", null));
+                    .body(SuccessResponse.of("등급별 좌석 배치도 조회 중 오류가 발생했습니다", null));
         }
     }
 
@@ -295,7 +295,7 @@ public class SeatLayoutController {
             **제공 정보:**
             - 공연장 기본 정보
             - 전체 좌석 통계
-            - 구역별 요약 (상세 좌석 정보 제외)
+            - 등급별 요약 (상세 좌석 정보 제외)
             """
     )
     @GetMapping("/{concertId}/seat-layout/summary")

@@ -23,8 +23,8 @@ public record SeatLayoutResponseDTO(
         @Schema(description = "좌석 통계 정보")
         SeatStatistics statistics,
 
-        @Schema(description = "구역별 좌석 배치")
-        List<SectionLayoutResponseDTO> sections,
+        @Schema(description = "등급별 좌석 배치")
+        List<GradeLayoutResponseDTO> grades,
 
         @Schema(description = "조회 시간")
         LocalDateTime retrievedAt
@@ -92,21 +92,21 @@ public record SeatLayoutResponseDTO(
     ) {}
 
     /**
-     * 각 구역별 좌석 정보로부터 전체 좌석 배치도 응답 생성
+     * 각 등급별 좌석 정보로부터 전체 좌석 배치도 응답 생성
      * @param concertId 콘서트 ID
      * @param venueInfo 공연장 정보
-     * @param sections 구역별 좌석 정보
+     * @param grades 등급별 좌석 정보
      * @return SeatLayoutResponse 객체
      */
-    public static SeatLayoutResponseDTO from(Long concertId, VenueInfo venueInfo, List<SectionLayoutResponseDTO> sections) {
+    public static SeatLayoutResponseDTO from(Long concertId, VenueInfo venueInfo, List<GradeLayoutResponseDTO> grades) {
         // 전체 좌석 수 계산
-        int totalSeats = sections.stream()
-                .mapToInt(SectionLayoutResponseDTO::totalSeats)
+        int totalSeats = grades.stream()
+                .mapToInt(GradeLayoutResponseDTO::totalSeats)
                 .sum();
 
         // 전체 예매 가능 좌석 수 계산
-        int availableSeats = sections.stream()
-                .mapToInt(SectionLayoutResponseDTO::availableSeats)
+        int availableSeats = grades.stream()
+                .mapToInt(GradeLayoutResponseDTO::availableSeats)
                 .sum();
 
         // 전체 예매가 이미 되어있는 좌석 수 계산
@@ -116,14 +116,14 @@ public record SeatLayoutResponseDTO(
                 (double) availableSeats / totalSeats * 100 : 0.0;
 
         // 전체 가격 범위 계산
-        BigDecimal minPrice = sections.stream()
-                .map(section -> section.priceRange().minPrice())
+        BigDecimal minPrice = grades.stream()
+                .map(grade -> grade.priceRange().minPrice())
                 .filter(price -> price.compareTo(BigDecimal.ZERO) > 0)
                 .min(BigDecimal::compareTo)
                 .orElse(BigDecimal.ZERO);
 
-        BigDecimal maxPrice = sections.stream()
-                .map(section -> section.priceRange().maxPrice())
+        BigDecimal maxPrice = grades.stream()
+                .map(grade -> grade.priceRange().maxPrice())
                 .max(BigDecimal::compareTo)
                 .orElse(BigDecimal.ZERO);
 
@@ -139,7 +139,7 @@ public record SeatLayoutResponseDTO(
                 concertId,
                 venueInfo,
                 statistics,
-                sections,
+                grades,
                 LocalDateTime.now()
         );
     }

@@ -4,11 +4,12 @@ import com.team03.ticketmon._global.exception.BusinessException;
 import com.team03.ticketmon._global.exception.ErrorCode;
 import com.team03.ticketmon.concert.domain.Concert;
 import com.team03.ticketmon.concert.domain.ConcertSeat;
+import com.team03.ticketmon.concert.domain.enums.SeatGrade;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
 import com.team03.ticketmon.seat.dto.SeatDetailResponseDTO;
 import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
-import com.team03.ticketmon.seat.dto.SectionLayoutResponseDTO;
+import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
 import com.team03.ticketmon.venue.dto.VenueDTO;
 import com.team03.ticketmon.venue.service.VenueService;
 import lombok.RequiredArgsConstructor;
@@ -88,28 +89,28 @@ public class SeatLayoutService {
                     .toList();
 
             // 5. 구역별로 그룹핑
-            Map<String, List<SeatDetailResponseDTO>> seatsBySection = seatDetails.stream()
+            Map<SeatGrade, List<SeatDetailResponseDTO>> seatsByGrade = seatDetails.stream()
                     .collect(Collectors.groupingBy(
-                            SeatDetailResponseDTO::section,
+                            SeatDetailResponseDTO::grade,
                             Collectors.toList()
                     ));
 
-            log.debug("구역별 그룹핑 완료: concertId={}, 구역수={}, 구역={}",
-                    concertId, seatsBySection.size(), seatsBySection.keySet());
+            log.debug("등급별 그룹핑 완료: concertId={}, 등급수={}, 등급={}",
+                    concertId, seatsByGrade.size(), seatsByGrade.keySet());
 
-            // 6. 구역별 상세 정보 생성 (구역명 기준 정렬)
-            List<SectionLayoutResponseDTO> sections = seatsBySection.entrySet().stream()
+            // 6. 등급별 상세 정보 생성 (등급명 기준 정렬)
+            List<GradeLayoutResponseDTO> grades = seatsByGrade.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey()) // 구역명으로 정렬 (A, B, C, VIP 등)
-                    .map(entry -> SectionLayoutResponseDTO.from(entry.getKey(), entry.getValue()))
+                    .map(entry -> GradeLayoutResponseDTO.from(entry.getKey(), entry.getValue()))
                     .collect(Collectors.toList());
 
             // 7. 전체 좌석 배치도 생성
-            SeatLayoutResponseDTO response = SeatLayoutResponseDTO.from(concertId, venueInfo, sections);
+            SeatLayoutResponseDTO response = SeatLayoutResponseDTO.from(concertId, venueInfo, grades);
 
-            log.info("좌석 배치도 조회 완료: concertId={}, 총좌석={}, 구역수={}, 예매가능률={}%",
+            log.info("좌석 배치도 조회 완료: concertId={}, 총좌석={}, 등급수={}, 예매가능률={}%",
                     concertId,
                     response.statistics().totalSeats(),
-                    sections.size(),
+                    grades.size(),
                     String.format("%.1f", response.statistics().availabilityRate()));
 
             return response;
@@ -125,14 +126,14 @@ public class SeatLayoutService {
     }
 
     /**
-     * 특정 구역의 좌석 배치 조회
+     * 특정 등급의 좌석 배치 조회
      * @param concertId 콘서트 ID
-     * @param sectionName 구역명 (A, B, VIP 등)
-     * @return 해당 구역의 좌석 배치 정보
-     * @throws BusinessException 콘서트나 구역을 찾을 수 없는 경우
+     * @param gradeName 등급명 (A, B, VIP 등)
+     * @return 해당 등급의 좌석 배치 정보
+     * @throws BusinessException 콘서트나 등급을 찾을 수 없는 경우
      */
-    public SectionLayoutResponseDTO getSectionLayout(Long concertId, String sectionName) {
-        log.info("구역별 좌석 배치도 조회: concertId={}, section={}", concertId, sectionName);
+    public GradeLayoutResponseDTO getGradeLayout(Long concertId, String gradeName) {
+        log.info("등급별 좌석 배치도 조회: concertId={}, grade={}", concertId, gradeName);
 
         try {
             // 1. 콘서트 존재 여부 확인
@@ -142,57 +143,64 @@ public class SeatLayoutService {
             }
 
             // 2. 입력값 검증
-            if (sectionName == null || sectionName.trim().isEmpty()) {
-                log.warn("구역명이 비어있음: concertId={}", concertId);
-                throw new BusinessException(ErrorCode.INVALID_INPUT, "구역명을 입력해주세요.");
+            if (gradeName == null || gradeName.trim().isEmpty()) {
+                log.warn("등급명이 비어있음: concertId={}", concertId);
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "등급명을 입력해주세요.");
             }
 
-            String trimmedSectionName = sectionName.trim();
+            // 3. 문자열을 SeatGrade enum으로 변환
+            SeatGrade targetGrade;
+            try {
+                targetGrade = SeatGrade.valueOf(gradeName.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "유효하지 않은 등급입니다: " + gradeName);
+            }
 
-            // 3. 해당 콘서트의 모든 구역의 모든 좌석을 DB 에서 가져옴
+            // 4. 해당 콘서트의 모든 좌석을 DB 에서 가져옴
             List<ConcertSeat> concertSeats = concertSeatRepository.findByConcertIdWithDetails(concertId);
 
             log.debug("전체 좌석 조회 완료: concertId={}, 총 좌석수={}", concertId, concertSeats.size());
 
-            // 4. 특정 구역 필터링 (대소문자 무시)
-            List<SeatDetailResponseDTO> sectionSeats = concertSeats.stream()
-                    .filter(cs -> trimmedSectionName.equalsIgnoreCase(cs.getSeat().getSection())) // filter: 원하는 구역만 걸러내기
+            // 5. 특정 등급 필터링 (대소문자 무시)
+            List<SeatDetailResponseDTO> gradeSeats = concertSeats.stream()
+                    .filter(cs -> cs.getGrade() == targetGrade)
                     .map(SeatDetailResponseDTO::from)
                     .collect(Collectors.toList());
 
-            if (sectionSeats.isEmpty()) {
-                log.warn("해당 구역에 좌석이 없습니다: concertId={}, section={}", concertId, trimmedSectionName);
+            if (gradeSeats.isEmpty()) {
+                log.warn("해당 등급에 좌석이 없습니다: concertId={}, grade={}", concertId, gradeSeats);
 
-                // 사용자 친화적 에러 메시지 (사용 가능한 구역 목록 제공)
-                List<String> availableSections = concertSeats.stream()
-                        .map(cs -> cs.getSeat().getSection())
+                // 사용자 친화적 에러 메시지 (사용 가능한 등급 목록 제공)
+                List<String> availableGrades = concertSeats.stream()
+                        .map(cs -> cs.getGrade().name())
                         .distinct()
                         .sorted()
                         .collect(Collectors.toList());
 
-                log.info("사용 가능한 구역 목록: concertId={}, sections={}", concertId, availableSections);
+                log.info("사용 가능한 등급 목록: concertId={}, grades={}", concertId, availableGrades);
 
                 throw new BusinessException(ErrorCode.SEAT_NOT_FOUND,
-                        String.format("'%s' 구역을 찾을 수 없습니다. 사용 가능한 구역: %s",
-                                trimmedSectionName, String.join(", ", availableSections)));
+                        String.format("'%s'등급을 찾을 수 없습니다. 사용 가능한 등급: %s",
+                                gradeName, String.join(", ", availableGrades)));
             }
 
-            SectionLayoutResponseDTO response = SectionLayoutResponseDTO.from(trimmedSectionName, sectionSeats);
+            GradeLayoutResponseDTO response = GradeLayoutResponseDTO.from(targetGrade, gradeSeats);
 
-            log.info("구역별 좌석 배치도 조회 완료: concertId={}, section={}, 좌석수={}, 예매가능={}",
-                    concertId, trimmedSectionName, response.totalSeats(), response.availableSeats());
+            log.info("등급별 좌석 배치도 조회 완료: concertId={}, grade={}, 좌석수={}, 예매가능={}",
+                    concertId, gradeName, response.totalSeats(), response.availableSeats());
 
             return response;
 
         } catch (BusinessException e) {
-            log.error("구역별 좌석 배치도 조회 중 비즈니스 예외: concertId={}, section={}, error={}",
-                    concertId, sectionName, e.getMessage());
+            log.error("등급별 좌석 배치도 조회 중 비즈니스 예외: concertId={}, grade={}, error={}",
+                    concertId, gradeName, e.getMessage());
             throw e;
         } catch (Exception e) {
-            log.error("구역별 좌석 배치도 조회 중 예상치 못한 오류: concertId={}, section={}",
-                    concertId, sectionName, e);
+            log.error("등급별 좌석 배치도 조회 중 예상치 못한 오류: concertId={}, grade={}",
+                    concertId, gradeName, e);
             throw new BusinessException(ErrorCode.SERVER_ERROR,
-                    "구역별 좌석 배치도 조회 중 오류가 발생했습니다.");
+                    "등급별 좌석 배치도 조회 중 오류가 발생했습니다.");
         }
     }
 
