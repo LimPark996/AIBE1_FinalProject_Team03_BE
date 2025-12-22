@@ -154,7 +154,7 @@ public class SeatLayoutController {
             log.info("좌석 배치도 조회 성공: concertId={}, 총좌석={}, 구역수={}",
                     concertId,
                     seatLayout.statistics().totalSeats(),
-                    seatLayout.sections().size());
+                    seatLayout.grades().size());
 
             return ResponseEntity.ok(SuccessResponse.of("좌석 배치도 조회 성공", seatLayout));
 
