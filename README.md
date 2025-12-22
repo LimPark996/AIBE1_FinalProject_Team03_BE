@@ -2,6 +2,9 @@
 
 > 실시간 좌석 선점과 대기열 관리를 지원하는 콘서트 티켓 예매 백엔드 서비스
 
+**테스트 ID: test01**
+**테스트 PW: test011234!@#$**
+
 ![콘서트티켓예매시스템](https://github.com/user-attachments/assets/a7be3b7c-896d-48f2-9c05-bec7fa2a3f75)
 
 📺 [발표 영상](https://www.youtube.com/watch?v=FLgYcKAJM0o) | 📑 [Figma 발표자료](https://www.figma.com/slides/4RZvK5E6tnWw2bQsHqx6H9/Untitled?node-id=1-19&t=fKAZP0N9cTwcIzEB-1)
