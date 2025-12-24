@@ -242,8 +242,20 @@ public class SeatStatusService {
             // 1. 현재 좌석 상태 확인
             Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
 
+            // 기존 좌석 정보 추출 (grade, price 등 보존용)
+            String grade = null;
+            java.math.BigDecimal price = null;
+            String seatRow = null;
+            Integer seatNumber = null;
+
             if (currentStatus.isPresent()) {
                 SeatStatus seat = currentStatus.get();
+
+                // 기존 좌석 정보 보존
+                grade = seat.getGrade();
+                price = seat.getPrice();
+                seatRow = seat.getSeatRow();
+                seatNumber = seat.getSeatNumber();
 
                 // 이미 예매 완료된 좌석
                 if (seat.getStatus() == SeatStatusEnum.BOOKED) {
@@ -285,6 +297,10 @@ public class SeatStatusService {
                     .reservedAt(now)
                     .expiresAt(expiresAt)
                     .seatInfo(seatInfo)
+                    .grade(grade)
+                    .price(price)
+                    .seatRow(seatRow)
+                    .seatNumber(seatNumber)
                     .build();
 
             // 4. Redis에 저장 및 이벤트 발행 (기존 번호 3에서 4로 변경)
