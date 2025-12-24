@@ -1,6 +1,7 @@
 package com.team03.ticketmon.seat.controller;
 
 import com.team03.ticketmon._global.exception.SuccessResponse;
+import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
 import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
 import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
 import com.team03.ticketmon.seat.service.SeatCacheInitService;
@@ -16,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 좌석 배치도 조회 컨트롤러
@@ -165,6 +168,14 @@ public class SeatLayoutController {
             return ResponseEntity.status(500)
                     .body(SuccessResponse.of("좌석 배치도 조회 중 오류가 발생했습니다", null));
         }
+    }
+
+    @GetMapping("/{concertId}/grade-prices")
+    public ResponseEntity<SuccessResponse<List<GradePriceResponseDTO>>> getGradePrices(
+            @PathVariable Long concertId) {
+
+        List<GradePriceResponseDTO> prices = seatLayoutService.getGradePrices(concertId);
+        return ResponseEntity.ok(SuccessResponse.of("등급별 가격 조회 성공", prices));
     }
 
     /**

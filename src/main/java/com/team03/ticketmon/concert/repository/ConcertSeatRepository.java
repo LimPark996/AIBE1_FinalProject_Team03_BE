@@ -60,4 +60,10 @@ public interface ConcertSeatRepository extends JpaRepository<ConcertSeat, Long> 
 			@Param("concertId") Long concertId,
 			@Param("seatIds") List<Long> seatIds);
 
+	@Query("SELECT DISTINCT cs.grade, cs.price " +
+			"FROM ConcertSeat cs " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"ORDER BY cs.grade")
+	List<Object[]> findGradePricesByConcertId(@Param("concertId") Long concertId);
+
 }

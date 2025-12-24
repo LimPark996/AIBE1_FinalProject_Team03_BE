@@ -7,6 +7,7 @@ import com.team03.ticketmon.concert.domain.ConcertSeat;
 import com.team03.ticketmon.concert.domain.enums.SeatGrade;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
+import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
 import com.team03.ticketmon.seat.dto.SeatDetailResponseDTO;
 import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
 import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -202,6 +204,21 @@ public class SeatLayoutService {
             throw new BusinessException(ErrorCode.SERVER_ERROR,
                     "등급별 좌석 배치도 조회 중 오류가 발생했습니다.");
         }
+    }
+
+    public List<GradePriceResponseDTO> getGradePrices(Long concertId) {
+        if (!concertRepository.existsById(concertId)) {
+            throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
+        }
+
+        List<Object[]> results = concertSeatRepository.findGradePricesByConcertId(concertId);
+
+        return results.stream()
+                .map(row -> GradePriceResponseDTO.from(
+                        (SeatGrade) row[0],
+                        (BigDecimal) row[1]
+                ))
+                .toList();
     }
 
     /**
