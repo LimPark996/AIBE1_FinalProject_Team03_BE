@@ -43,7 +43,7 @@ public record SeatDetailResponseDTO(
      * @param concertSeat 콘서트 좌석 정보
      * @return SeatDetailResponse 객체
      */
-    public static SeatDetailResponseDTO from(ConcertSeat concertSeat) {
+    public static SeatDetailResponseDTO from(ConcertSeat concertSeat, boolean isAvailable) {
         Seat seat = concertSeat.getSeat();
 
         // 좌석 표시명 생성 (구역-열-번호 형식)
@@ -51,9 +51,6 @@ public record SeatDetailResponseDTO(
                 seat.getSection(),
                 seat.getSeatRow(),
                 seat.getSeatNumber());
-
-        // 예매 가능 여부 판단 (티켓이 없으면 예매 가능)
-        boolean isAvailable = concertSeat.getTicket() == null;
 
         return new SeatDetailResponseDTO(
                 seat.getSeatId(),

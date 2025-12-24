@@ -1,6 +1,7 @@
 package com.team03.ticketmon.concert.repository;
 
 import com.team03.ticketmon.concert.domain.ConcertSeat;
+import com.team03.ticketmon.concert.domain.enums.SeatGrade;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -66,4 +67,23 @@ public interface ConcertSeatRepository extends JpaRepository<ConcertSeat, Long> 
 			"ORDER BY cs.grade")
 	List<Object[]> findGradePricesByConcertId(@Param("concertId") Long concertId);
 
+	@Query("SELECT cs FROM ConcertSeat cs " +
+			"JOIN FETCH cs.seat s " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"AND cs.grade = :grade " +
+			"ORDER BY s.section, s.seatRow, s.seatNumber")
+	List<ConcertSeat> findByConcertIdAndGrade(
+			@Param("concertId") Long concertId,
+			@Param("grade") SeatGrade grade);
+
+	@Query("SELECT cs FROM ConcertSeat cs " +
+			"JOIN FETCH cs.seat s " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"AND cs.grade = :grade " +
+			"AND s.section = :section " +
+			"ORDER BY s.seatRow, s.seatNumber")
+	List<ConcertSeat> findByConcertIdAndGradeAndSection(
+			@Param("concertId") Long concertId,
+			@Param("grade") SeatGrade grade,
+			@Param("section") String section);
 }

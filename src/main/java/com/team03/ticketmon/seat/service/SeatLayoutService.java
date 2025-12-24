@@ -7,6 +7,7 @@ import com.team03.ticketmon.concert.domain.ConcertSeat;
 import com.team03.ticketmon.concert.domain.enums.SeatGrade;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
+import com.team03.ticketmon.seat.domain.SeatStatus;
 import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
 import com.team03.ticketmon.seat.dto.SeatDetailResponseDTO;
 import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
@@ -35,11 +36,7 @@ public class SeatLayoutService {
     private final ConcertRepository concertRepository;
     private final ConcertSeatRepository concertSeatRepository;
     private final VenueService venueService;
-
-    // ConcertSeat: DB에 저장된 "이 콘서트의 이 좌석" 정보
-    // SeatDetailResponseDTO: 클라이언트에게 보여줄 "좌석 1개"의 정보
-    // SectionLayoutResponseDTO: "A구역" 전체의 통계와 좌석 목록
-    // SeatLayoutResponseDTO: 콘서트 전체의 좌석 배치도
+    private final SeatStatusService seatStatusService;
 
     /**
      * 콘서트의 전체 좌석 배치도 조회
@@ -61,12 +58,6 @@ public class SeatLayoutService {
 
             // 2. 공연장 정보 조회 (VenueName 으로 조회)
             VenueDTO venue = venueService.getVenueByName(concert.getVenueName());
-            if (venue == null) {
-                    log.warn("공연장 정보를 찾을 수 없음: venueName={}, concertId={}", concert.getVenueName(), concertId);
-                    log.info("대체 공연장 정보 사용: venueName={}", concert.getVenueName());
-                    venue = createFallbackVenueInfo(concert.getVenueName());
-            }
-
             log.debug("공연장 정보 준비 완료: venueName={}", venue.getName());
 
             // venueInfo는 venue를 저장하는 게 아니라, venue 로부터 필요한 데이터만 추출해서 새로 만든 객체
@@ -85,12 +76,17 @@ public class SeatLayoutService {
 
             log.debug("좌석 정보 조회 성공: concertId={}, 총 좌석수={}", concertId, concertSeats.size());
 
-            // 4. 좌석 정보를 DTO로 변환
+            Map<Long, SeatStatus> seatStatuses = seatStatusService.getAllSeatStatus(concertId);
+
             List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
-                    .map(SeatDetailResponseDTO::from)
+                    .map(cs -> {
+                        SeatStatus status = seatStatuses.get(cs.getConcertSeatId());
+                        boolean isAvailable = (status == null) ||
+                                (status.getStatus() == SeatStatus.SeatStatusEnum.AVAILABLE);
+                        return SeatDetailResponseDTO.from(cs, isAvailable);
+                    })
                     .toList();
 
-            // 5. 구역별로 그룹핑
             Map<SeatGrade, List<SeatDetailResponseDTO>> seatsByGrade = seatDetails.stream()
                     .collect(Collectors.groupingBy(
                             SeatDetailResponseDTO::grade,
@@ -100,20 +96,17 @@ public class SeatLayoutService {
             log.debug("등급별 그룹핑 완료: concertId={}, 등급수={}, 등급={}",
                     concertId, seatsByGrade.size(), seatsByGrade.keySet());
 
-            // 6. 등급별 상세 정보 생성 (등급명 기준 정렬)
             List<GradeLayoutResponseDTO> grades = seatsByGrade.entrySet().stream()
                     .sorted(Map.Entry.comparingByKey()) // 구역명으로 정렬 (A, B, C, VIP 등)
                     .map(entry -> GradeLayoutResponseDTO.from(entry.getKey(), entry.getValue()))
                     .collect(Collectors.toList());
 
-            // 7. 전체 좌석 배치도 생성
             SeatLayoutResponseDTO response = SeatLayoutResponseDTO.from(concertId, venueInfo, grades);
 
-            log.info("좌석 배치도 조회 완료: concertId={}, 총좌석={}, 등급수={}, 예매가능률={}%",
+            log.info("좌석 배치도 조회 완료: concertId={}, 총좌석={}, 등급수={}",
                     concertId,
                     response.statistics().totalSeats(),
-                    grades.size(),
-                    String.format("%.1f", response.statistics().availabilityRate()));
+                    grades.size());
 
             return response;
 
@@ -159,19 +152,12 @@ public class SeatLayoutService {
                         "유효하지 않은 등급입니다: " + gradeName);
             }
 
-            // 4. 해당 콘서트의 모든 좌석을 DB 에서 가져옴
-            List<ConcertSeat> concertSeats = concertSeatRepository.findByConcertIdWithDetails(concertId);
+            // 4. 해당 콘서트의 특정 등급의 모든 좌석을 DB 에서 가져옴
+            List<ConcertSeat> concertSeats = concertSeatRepository
+                    .findByConcertIdAndGrade(concertId, targetGrade);
 
-            log.debug("전체 좌석 조회 완료: concertId={}, 총 좌석수={}", concertId, concertSeats.size());
-
-            // 5. 특정 등급 필터링 (대소문자 무시)
-            List<SeatDetailResponseDTO> gradeSeats = concertSeats.stream()
-                    .filter(cs -> cs.getGrade() == targetGrade)
-                    .map(SeatDetailResponseDTO::from)
-                    .collect(Collectors.toList());
-
-            if (gradeSeats.isEmpty()) {
-                log.warn("해당 등급에 좌석이 없습니다: concertId={}, grade={}", concertId, gradeSeats);
+            if (concertSeats.isEmpty()) {
+                log.warn("해당 등급에 좌석이 없습니다: concertId={}, grade={}", concertId, concertSeats);
 
                 // 사용자 친화적 에러 메시지 (사용 가능한 등급 목록 제공)
                 List<String> availableGrades = concertSeats.stream()
@@ -186,13 +172,87 @@ public class SeatLayoutService {
                         String.format("'%s'등급을 찾을 수 없습니다. 사용 가능한 등급: %s",
                                 gradeName, String.join(", ", availableGrades)));
             }
+            // 5. Redis에서 실시간 상태 조회
+            Map<Long, SeatStatus> seatStatuses = seatStatusService.getAllSeatStatus(concertId);
 
-            GradeLayoutResponseDTO response = GradeLayoutResponseDTO.from(targetGrade, gradeSeats);
+            // 6. DB + Redis 합쳐서 DTO 변환
+            List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
+                    .map(cs -> {
+                        SeatStatus status = seatStatuses.get(cs.getConcertSeatId());
+                        boolean isAvailable = (status == null) ||
+                                (status.getStatus() == SeatStatus.SeatStatusEnum.AVAILABLE);
+                        return SeatDetailResponseDTO.from(cs, isAvailable);
+                    })
+                    .toList();
 
-            log.info("등급별 좌석 배치도 조회 완료: concertId={}, grade={}, 좌석수={}, 예매가능={}",
-                    concertId, gradeName, response.totalSeats(), response.availableSeats());
+            return GradeLayoutResponseDTO.from(targetGrade, seatDetails);
 
-            return response;
+        } catch (BusinessException e) {
+            log.error("등급별 좌석 배치도 조회 중 비즈니스 예외: concertId={}, grade={}, error={}",
+                    concertId, gradeName, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("등급별 좌석 배치도 조회 중 예상치 못한 오류: concertId={}, grade={}",
+                    concertId, gradeName, e);
+            throw new BusinessException(ErrorCode.SERVER_ERROR,
+                    "등급별 좌석 배치도 조회 중 오류가 발생했습니다.");
+        }
+    }
+
+    public GradeLayoutResponseDTO getGradeSectionLayout(Long concertId, String gradeName, String sectionName) {
+        log.info("등급 및 구역별 좌석 배치도 조회: concertId={}, grade={}, section={}", concertId, gradeName, sectionName);
+
+        try {
+            // 1. 콘서트 존재 여부 확인
+            if (!concertRepository.existsById(concertId)) {
+                log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
+                throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
+            }
+
+            // 2. 입력값 검증
+            if (gradeName == null || gradeName.trim().isEmpty()) {
+                log.warn("등급명이 비어있음: concertId={}", concertId);
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "등급명을 입력해주세요.");
+            }
+
+            // 3. 문자열을 SeatGrade enum으로 변환
+            SeatGrade targetGrade;
+            try {
+                targetGrade = SeatGrade.valueOf(gradeName.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "유효하지 않은 등급입니다: " + gradeName);
+            }
+
+            if (sectionName == null || sectionName.trim().isEmpty()) {
+                log.warn("구역명이 비어있음: concertId={}", concertId);
+                throw new BusinessException(ErrorCode.INVALID_INPUT, "구역명을 입력해주세요.");
+            }
+
+            // 4. 해당 콘서트의 특정 등급 및 구역의 모든 좌석을 DB 에서 가져옴
+            List<ConcertSeat> concertSeats = concertSeatRepository
+                    .findByConcertIdAndGradeAndSection(concertId, targetGrade, sectionName);
+
+            if (concertSeats.isEmpty()) {
+                log.warn("해당 등급 및 구역에 좌석이 없습니다: concertId={}, gradeSection={}", concertId, concertSeats);
+
+                throw new BusinessException(ErrorCode.SEAT_NOT_FOUND,"등급 또는 구역을 찾을 수 없습니다.");
+            }
+
+            // 5. Redis에서 실시간 상태 조회
+            Map<Long, SeatStatus> seatStatuses = seatStatusService.getAllSeatStatus(concertId);
+
+            // 6. DB + Redis 합쳐서 DTO 변환
+            List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
+                    .map(cs -> {
+                        SeatStatus status = seatStatuses.get(cs.getConcertSeatId());
+                        boolean isAvailable = (status == null) ||
+                                (status.getStatus() == SeatStatus.SeatStatusEnum.AVAILABLE);
+                        return SeatDetailResponseDTO.from(cs, isAvailable);
+                    })
+                    .toList();
+
+            return GradeLayoutResponseDTO.from(targetGrade, seatDetails);
 
         } catch (BusinessException e) {
             log.error("등급별 좌석 배치도 조회 중 비즈니스 예외: concertId={}, grade={}, error={}",
@@ -219,35 +279,5 @@ public class SeatLayoutService {
                         (BigDecimal) row[1]
                 ))
                 .toList();
-    }
-
-    /**
-     * 🔧 공연장 정보를 찾을 수 없을 때 사용할 대체 VenueDTO 생성
-     * 시스템의 안정성을 위해 좌석 배치도는 여전히 제공하되, 공연장 정보는 기본값 사용
-     *
-     * @param venueName 콘서트에 등록된 공연장 이름
-     * @return 대체 VenueDTO
-     */
-    private VenueDTO createFallbackVenueInfo(String venueName) {
-        log.debug("대체 공연장 정보 생성: venueName={}", venueName);
-
-        // VenueDTO의 생성자에 맞춰 임시 Venue 객체 생성 후 DTO 변환
-        // 실제로는 존재하지 않는 공연장이지만 시스템 안정성을 위해 제공
-        return new VenueDTO(new com.team03.ticketmon.venue.domain.Venue() {
-            @Override
-            public Long getVenueId() {
-                return -1L; // 임시 ID (실제 DB에 없는 값)
-            }
-
-            @Override
-            public String getName() {
-                return venueName != null ? venueName : "알 수 없는 공연장";
-            }
-
-            @Override
-            public Integer getCapacity() {
-                return 0; // 알 수 없음
-            }
-        });
     }
 }
