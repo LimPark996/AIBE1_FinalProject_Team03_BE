@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.HashMap;
 
 /**
  * 좌석 배치도 관련 비즈니스 로직 서비스
@@ -289,7 +290,7 @@ public class SeatLayoutService {
     Map<SeatGrade, Long> reservedCountByGrade = new HashMap<>();
     for (SeatStatus status : seatStatuses.values()) {
         if (status.getStatus() != SeatStatus.SeatStatusEnum.AVAILABLE) {
-            SeatGrade grade = status.getGrade();  // SeatStatus에 grade 필드 필요
+            SeatGrade grade = SeatGrade.valueOf(status.getGrade());
             reservedCountByGrade.merge(grade, 1L, Long::sum);
         }
     }
@@ -306,6 +307,6 @@ public class SeatLayoutService {
                 
                 return GradePriceResponseDTO.from(grade, price, (int) totalSeats, availableSeats);
             })
-            .toList();
+            .collect(Collectors.toList());
 }
 }
