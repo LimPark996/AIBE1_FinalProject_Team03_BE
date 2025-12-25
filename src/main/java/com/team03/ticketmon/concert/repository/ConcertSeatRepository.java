@@ -67,6 +67,9 @@ public interface ConcertSeatRepository extends JpaRepository<ConcertSeat, Long> 
 			"ORDER BY cs.grade")
 	List<Object[]> findGradePricesByConcertId(@Param("concertId") Long concertId);
 
+@Query("SELECT cs.grade, COUNT(cs) FROM ConcertSeat cs WHERE cs.concert.id = :concertId GROUP BY cs.grade")
+List<Object[]> countSeatsByGrade(@Param("concertId") Long concertId);
+
 	@Query("SELECT cs FROM ConcertSeat cs " +
 			"JOIN FETCH cs.seat s " +
 			"WHERE cs.concert.concertId = :concertId " +
