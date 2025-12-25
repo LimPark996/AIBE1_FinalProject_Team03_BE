@@ -267,17 +267,45 @@ public class SeatLayoutService {
     }
 
     public List<GradePriceResponseDTO> getGradePrices(Long concertId) {
-        if (!concertRepository.existsById(concertId)) {
-            throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
-        }
-
-        List<Object[]> results = concertSeatRepository.findGradePricesByConcertId(concertId);
-
-        return results.stream()
-                .map(row -> GradePriceResponseDTO.from(
-                        (SeatGrade) row[0],
-                        (BigDecimal) row[1]
-                ))
-                .toList();
+    if (!concertRepository.existsById(concertId)) {
+        throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
     }
+
+    // 1. 등급별 가격 조회 (기존 쿼리 - 빠름)
+    List<Object[]> priceResults = concertSeatRepository.findGradePricesByConcertId(concertId);
+
+    // 2. 등급별 총 좌석 수 조회 (새 쿼리 - 빠름)
+    List<Object[]> countResults = concertSeatRepository.countSeatsByGrade(concertId);
+    Map<SeatGrade, Long> totalCountByGrade = countResults.stream()
+            .collect(Collectors.toMap(
+                    row -> (SeatGrade) row[0],
+                    row -> (Long) row[1]
+            ));
+
+    // 3. Redis에서 선점된 좌석 수 조회
+    Map<Long, SeatStatus> seatStatuses = seatStatusService.getAllSeatStatus(concertId);
+    
+    // 등급별 선점된 좌석 수 계산 (RESERVED 또는 BOOKED 상태)
+    Map<SeatGrade, Long> reservedCountByGrade = new HashMap<>();
+    for (SeatStatus status : seatStatuses.values()) {
+        if (status.getStatus() != SeatStatus.SeatStatusEnum.AVAILABLE) {
+            SeatGrade grade = status.getGrade();  // SeatStatus에 grade 필드 필요
+            reservedCountByGrade.merge(grade, 1L, Long::sum);
+        }
+    }
+
+    // 4. DTO 생성
+    return priceResults.stream()
+            .map(row -> {
+                SeatGrade grade = (SeatGrade) row[0];
+                BigDecimal price = (BigDecimal) row[1];
+                
+                long totalSeats = totalCountByGrade.getOrDefault(grade, 0L);
+                long reservedSeats = reservedCountByGrade.getOrDefault(grade, 0L);
+                int availableSeats = (int) (totalSeats - reservedSeats);
+                
+                return GradePriceResponseDTO.from(grade, price, (int) totalSeats, availableSeats);
+            })
+            .toList();
+}
 }
