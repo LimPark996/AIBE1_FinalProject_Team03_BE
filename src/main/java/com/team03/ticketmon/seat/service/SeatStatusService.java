@@ -695,4 +695,43 @@ public class SeatStatusService {
             throw new RuntimeException("초기화 실패: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * 특정 좌석 ID 목록에 대한 상태만 조회 (HMGET 사용)
+     * HGETALL 대신 필요한 좌석만 조회하여 대규모 공연장 타임아웃 방지
+     */
+    public Map<Long, SeatStatus> getSeatStatusByIds(Long concertId, List<Long> seatIds) {
+        if (seatIds == null || seatIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        String key = SEAT_STATUS_KEY_PREFIX + concertId;
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+
+        // 캐시가 비어있으면 초기화
+        if (!seatMap.isExists() || seatMap.size() == 0) {
+            log.info("좌석 캐시가 비어있음. 자동 초기화: concertId={}", concertId);
+            try {
+                seatCacheInitService.initializeSeatCacheFromDB(concertId);
+            } catch (Exception e) {
+                log.error("좌석 캐시 초기화 실패: concertId={}", concertId, e);
+                return Collections.emptyMap();
+            }
+        }
+
+        // 필요한 좌석 ID들만 String으로 변환
+        Set<String> seatIdStrings = seatIds.stream()
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+
+        // HMGET으로 필요한 좌석만 조회 (O(n) where n = 요청 좌석 수)
+        Map<String, SeatStatus> result = seatMap.getAll(seatIdStrings);
+
+        // Long 키로 변환하여 반환
+        return result.entrySet().stream()
+                .collect(Collectors.toMap(
+                        entry -> Long.valueOf(entry.getKey()),
+                        Map.Entry::getValue
+                ));
+    }
 }

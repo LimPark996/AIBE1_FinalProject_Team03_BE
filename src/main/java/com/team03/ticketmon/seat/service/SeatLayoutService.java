@@ -176,7 +176,10 @@ public class SeatLayoutService {
                                 gradeName, String.join(", ", availableGrades)));
             }
             // 5. Redis에서 실시간 상태 조회
-            Map<Long, SeatStatus> seatStatuses = seatStatusService.getAllSeatStatus(concertId);
+            List<Long> seatIds = concertSeats.stream()
+                    .map(ConcertSeat::getConcertSeatId)
+                    .toList();
+            Map<Long, SeatStatus> seatStatuses = seatStatusService.getSeatStatusByIds(concertId, seatIds);
 
             // 6. DB + Redis 합쳐서 DTO 변환
             List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
