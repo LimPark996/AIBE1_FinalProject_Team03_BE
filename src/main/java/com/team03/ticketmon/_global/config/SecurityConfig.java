@@ -127,6 +127,9 @@ public class SecurityConfig {
 
                                 // 특정 콘서트 좌석 캐시 삭제
                                 .requestMatchers(HttpMethod.DELETE, "/api/concerts/*/seat-cache").permitAll()
+                                
+                                // 전체 콘서트 좌석 캐시 삭제
+                                .requestMatchers(HttpMethod.DELETE, "/api/concerts/seat-cache/all").permitAll()
 
                                 // 결제 콜백 및 웹훅 API (외부 시스템에서 호출하므로 permitAll)
                                 .requestMatchers("/api/v1/payments/success", "/api/v1/payments/fail").permitAll()
