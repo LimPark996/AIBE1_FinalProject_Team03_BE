@@ -407,6 +407,7 @@ public class ConcertService {
 			concert.getSellerId(),
 			concert.getVenueName(),
 			concert.getVenueAddress(),
+			concert.getVenueCapacityType(),
 			concert.getConcertDate(),
 			concert.getStartTime(),
 			concert.getEndTime(),

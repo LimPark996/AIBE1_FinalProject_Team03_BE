@@ -25,6 +25,7 @@ public class ConcertDTO {
 	private Long sellerId;
 	private String venueName;
 	private String venueAddress;
+	private String venueCapacityType;
 	private LocalDate concertDate;
 	private LocalTime startTime;
 	private LocalTime endTime;
