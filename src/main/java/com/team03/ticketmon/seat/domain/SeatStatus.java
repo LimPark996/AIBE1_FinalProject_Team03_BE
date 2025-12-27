@@ -36,6 +36,7 @@ public class SeatStatus {
     private BigDecimal price;
     private String seatRow;
     private Integer seatNumber;
+    private String section;
 
     public enum SeatStatusEnum {
         AVAILABLE,    // 예매 가능

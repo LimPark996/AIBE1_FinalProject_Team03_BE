@@ -247,6 +247,10 @@ public class SeatStatusService {
             java.math.BigDecimal price = null;
             String seatRow = null;
             Integer seatNumber = null;
+            String section = null;
+            if (currentStatus.isPresent()) {
+                section = currentStatus.get().getSection();  // ← section 가져오기
+            }
 
             if (currentStatus.isPresent()) {
                 SeatStatus seat = currentStatus.get();
@@ -301,12 +305,19 @@ public class SeatStatusService {
                     .price(price)
                     .seatRow(seatRow)
                     .seatNumber(seatNumber)
+                    .section(section)
                     .build();
 
-            // 4. Redis에 저장 및 이벤트 발행 (기존 번호 3에서 4로 변경)
+            // 4. Redis에 저장 및 이벤트 발행
             updateSeatStatus(reserved);
 
-            // 5. TTL 키 생성 (자동 만료 지원) (기존 번호 4에서 5로 변경)
+            // 5. 등급별 available 카운트 감소
+            decrementAvailableCount(concertId, grade);
+
+            // 6. 구역별 available 카운트 감소
+            decrementSectionAvailableCount(concertId, grade, section);
+
+            // 7. TTL 키 생성 (자동 만료 지원)
             createSeatTTLKey(concertId, concertSeatId);
 
             log.info("좌석 선점 완료: concertId={}, concertSeatId={}, userId={}, expiresAt={}, seatInfo={}",
@@ -370,6 +381,12 @@ public class SeatStatusService {
         // Redis에 갱신하고 이벤트 발행한다.
         updateSeatStatus(updatedStatus);
 
+        // 등급별 available 카운트 증가
+        incrementAvailableCount(concertId, currentSeat.getGrade());
+
+        // 구역별 available 카운트 증가
+        incrementSectionAvailableCount(concertId, currentSeat.getGrade(), currentSeat.getSection());
+
         // 4. TTL 키 삭제 (불필요한 Redis 키 만료 이벤트 방지)
         removeSeatTTLKey(concertId, concertSeatId);
 
@@ -397,10 +414,49 @@ public class SeatStatusService {
                     .build();
 
             updateSeatStatus(updatedStatus);
+
+            // 등급별 available 카운트 증가
+            incrementAvailableCount(concertId, currentSeat.getGrade());
+
+            // 구역별 available 카운트 증가
+            incrementSectionAvailableCount(concertId, currentSeat.getGrade(), currentSeat.getSection());
+
             removeSeatTTLKey(concertId, concertSeatId);
 
             log.info("좌석 강제 해제 완료 (관리자): concertId={}, concertSeatId={}, previousUserId={}",
                     concertId, concertSeatId, currentSeat.getUserId());
+        }
+    }
+
+    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
+
+    /**
+     * 등급별 available 카운트 감소 (좌석 선점 시)
+     */
+    private void decrementAvailableCount(Long concertId, String grade) {
+        if (grade == null) return;
+
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
+            long newCount = redissonClient.getAtomicLong(countKey).decrementAndGet();
+            log.debug("available 카운트 감소: concertId={}, grade={}, newCount={}", concertId, grade, newCount);
+        } catch (Exception e) {
+            log.warn("available 카운트 감소 실패: concertId={}, grade={}", concertId, grade, e);
+        }
+    }
+
+    /**
+     * 등급별 available 카운트 증가 (좌석 해제 시)
+     */
+    private void incrementAvailableCount(Long concertId, String grade) {
+        if (grade == null) return;
+
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
+            long newCount = redissonClient.getAtomicLong(countKey).incrementAndGet();
+            log.debug("available 카운트 증가: concertId={}, grade={}, newCount={}", concertId, grade, newCount);
+        } catch (Exception e) {
+            log.warn("available 카운트 증가 실패: concertId={}, grade={}", concertId, grade, e);
         }
     }
 
@@ -444,6 +500,38 @@ public class SeatStatusService {
             log.warn("예매 불가능한 좌석 상태: concertId={}, concertSeatId={}, currentState={}",
                     concertId, concertSeatId, currentState);
             throw new SeatReservationException("선점되지 않은 좌석은 예매할 수 없습니다. 현재 상태: " + currentState);
+        }
+    }
+
+    /**
+     * 구역별 available 카운트 감소 (좌석 선점 시)
+     */
+    private void decrementSectionAvailableCount(Long concertId, String grade, String section) {
+        if (grade == null || section == null) return;
+
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
+            long newCount = redissonClient.getAtomicLong(countKey).decrementAndGet();
+            log.debug("구역 available 카운트 감소: concertId={}, grade={}, section={}, newCount={}",
+                    concertId, grade, section, newCount);
+        } catch (Exception e) {
+            log.warn("구역 available 카운트 감소 실패: concertId={}, grade={}, section={}", concertId, grade, section, e);
+        }
+    }
+
+    /**
+     * 구역별 available 카운트 증가 (좌석 해제 시)
+     */
+    private void incrementSectionAvailableCount(Long concertId, String grade, String section) {
+        if (grade == null || section == null) return;
+
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
+            long newCount = redissonClient.getAtomicLong(countKey).incrementAndGet();
+            log.debug("구역 available 카운트 증가: concertId={}, grade={}, section={}, newCount={}",
+                    concertId, grade, section, newCount);
+        } catch (Exception e) {
+            log.warn("구역 available 카운트 증가 실패: concertId={}, grade={}, section={}", concertId, grade, section, e);
         }
     }
 

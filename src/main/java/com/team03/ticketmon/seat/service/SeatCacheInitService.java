@@ -13,9 +13,8 @@ import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 좌석 상태 캐시 초기화 서비스
@@ -95,6 +94,7 @@ public class SeatCacheInitService {
                             .price(concertSeat.getPrice())
                             .seatRow(seat.getSeatRow())
                             .seatNumber(seat.getSeatNumber())
+                            .section(seat.getSection())
                             .build();
 
                     // 8. 수정된 키 사용 (ConcertSeat ID로 저장)
@@ -117,9 +117,77 @@ public class SeatCacheInitService {
                 log.warn("처리 가능한 좌석 데이터가 없습니다: concertId={}", concertId);
             }
 
+            // 10. 등급별 available 카운트 초기화
+            initializeGradeAvailableCounts(concertId, batchSeatData.values());
+
+            // 11. 구역별 available 카운트 초기화
+            initializeSectionAvailableCounts(concertId, batchSeatData.values());
+
         } catch (Exception e) {
             log.error("DB 기반 좌석 캐시 초기화 중 오류 발생: concertId={}", concertId, e);
             throw new RuntimeException("좌석 캐시 초기화 실패: " + e.getMessage(), e);
+        }
+    }
+
+    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
+
+    /**
+     * 등급별 available 카운트 초기화
+     */
+    private void initializeGradeAvailableCounts(Long concertId, Collection<SeatStatus> seats) {
+        // 등급별 available 좌석 수 계산
+        Map<String, Long> availableCountByGrade = seats.stream()
+                .filter(seat -> seat.getStatus() == SeatStatusEnum.AVAILABLE)
+                .collect(Collectors.groupingBy(
+                        SeatStatus::getGrade,
+                        Collectors.counting()
+                ));
+
+        // 등급 목록 추출 (BOOKED 포함한 모든 등급)
+        Set<String> allGrades = seats.stream()
+                .map(SeatStatus::getGrade)
+                .collect(Collectors.toSet());
+
+        // Redis에 카운트 저장
+        for (String grade : allGrades) {
+            long available = availableCountByGrade.getOrDefault(grade, 0L);
+
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
+            redissonClient.getAtomicLong(countKey).set(available);
+
+            log.debug("등급별 카운트 초기화: concertId={}, grade={}, available={}",
+                    concertId, grade, available);
+        }
+    }
+
+    /**
+     * 구역별 available 카운트 초기화
+     */
+    private void initializeSectionAvailableCounts(Long concertId, Collection<SeatStatus> seats) {
+        // 등급+구역별로 그룹핑
+        Map<String, Long> availableCountByGradeSection = seats.stream()
+                .filter(seat -> seat.getStatus() == SeatStatusEnum.AVAILABLE)
+                .filter(seat -> seat.getSection() != null)  // null 방지
+                .collect(Collectors.groupingBy(
+                        seat -> seat.getGrade() + ":" + seat.getSection(),
+                        Collectors.counting()
+                ));
+
+        // 모든 등급+구역 조합 추출
+        Set<String> allGradeSections = seats.stream()
+                .filter(seat -> seat.getSection() != null)  // null 방지
+                .map(seat -> seat.getGrade() + ":" + seat.getSection())
+                .collect(Collectors.toSet());
+
+        // Redis에 카운트 저장
+        for (String gradeSection : allGradeSections) {
+            long available = availableCountByGradeSection.getOrDefault(gradeSection, 0L);
+
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + gradeSection + ":available";
+            redissonClient.getAtomicLong(countKey).set(available);
+
+            log.debug("구역별 카운트 초기화: concertId={}, gradeSection={}, available={}",
+                    concertId, gradeSection, available);
         }
     }
 

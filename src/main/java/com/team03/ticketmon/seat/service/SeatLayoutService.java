@@ -8,10 +8,8 @@ import com.team03.ticketmon.concert.domain.enums.SeatGrade;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
 import com.team03.ticketmon.seat.domain.SeatStatus;
+import com.team03.ticketmon.seat.dto.*;
 import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
-import com.team03.ticketmon.seat.dto.SeatDetailResponseDTO;
-import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
-import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
 import com.team03.ticketmon.venue.dto.VenueDTO;
 import com.team03.ticketmon.venue.service.VenueService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +21,11 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.ArrayList;
 
 /**
  * 좌석 배치도 관련 비즈니스 로직 서비스
@@ -199,6 +202,43 @@ public class SeatLayoutService {
         }
     }
 
+    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
+
+    @Autowired
+    private RedissonClient redissonClient;  // 필드 추가
+
+    /**
+     * 등급별 좌석 카운트 조회 (빠른 조회용)
+     */
+    public List<GradeCountResponseDTO> getGradeCounts(Long concertId) {
+        if (!concertRepository.existsById(concertId)) {
+            throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
+        }
+
+        // 1. DB에서 등급별 총 좌석 수 조회
+        List<Object[]> totalResults = concertSeatRepository.countSeatsByGrade(concertId);
+
+        // 2. Redis에서 등급별 available 카운트 조회
+        List<GradeCountResponseDTO> result = new ArrayList<>();
+
+        for (Object[] row : totalResults) {
+            SeatGrade grade = (SeatGrade) row[0];
+            Long totalSeats = (Long) row[1];
+
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade.name() + ":available";
+            long availableSeats = redissonClient.getAtomicLong(countKey).get();
+
+            // 캐시 미스 시 (0이고 totalSeats > 0) → 전체가 available로 간주
+            if (availableSeats == 0 && totalSeats > 0) {
+                availableSeats = totalSeats;
+            }
+
+            result.add(new GradeCountResponseDTO(grade.name(), totalSeats, availableSeats));
+        }
+
+        return result;
+    }
+
     public GradeLayoutResponseDTO getGradeSectionLayout(Long concertId, String gradeName, String sectionName) {
         log.info("등급 및 구역별 좌석 배치도 조회: concertId={}, grade={}, section={}", concertId, gradeName, sectionName);
 
@@ -279,5 +319,45 @@ public class SeatLayoutService {
                         (BigDecimal) row[1]
                 ))
                 .toList();
+    }
+
+    /**
+     * 특정 등급의 구역별 좌석 카운트 조회
+     */
+    public List<SectionCountResponseDTO> getSectionCounts(Long concertId, String gradeName) {
+        if (!concertRepository.existsById(concertId)) {
+            throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
+        }
+
+        // 1. 문자열을 SeatGrade enum으로 변환
+        SeatGrade targetGrade;
+        try {
+            targetGrade = SeatGrade.valueOf(gradeName.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "유효하지 않은 등급입니다: " + gradeName);
+        }
+
+        // 2. DB에서 구역별 총 좌석 수 조회
+        List<Object[]> totalResults = concertSeatRepository.countSeatsByGradeAndSection(concertId, targetGrade);
+
+        // 3. Redis에서 구역별 available 카운트 조회
+        List<SectionCountResponseDTO> result = new ArrayList<>();
+
+        for (Object[] row : totalResults) {
+            String section = (String) row[0];
+            Long totalSeats = (Long) row[1];
+
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + gradeName + ":" + section + ":available";
+            long availableSeats = redissonClient.getAtomicLong(countKey).get();
+
+            // 캐시 미스 시 totalSeats로 간주
+            if (availableSeats == 0 && totalSeats > 0) {
+                availableSeats = totalSeats;
+            }
+
+            result.add(new SectionCountResponseDTO(section, totalSeats, availableSeats));
+        }
+
+        return result;
     }
 }

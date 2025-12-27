@@ -86,4 +86,16 @@ public interface ConcertSeatRepository extends JpaRepository<ConcertSeat, Long> 
 			@Param("concertId") Long concertId,
 			@Param("grade") SeatGrade grade,
 			@Param("section") String section);
+	@Query("SELECT cs.grade, COUNT(cs) FROM ConcertSeat cs WHERE cs.concert.id = :concertId GROUP BY cs.grade")
+	List<Object[]> countSeatsByGrade(@Param("concertId") Long concertId);
+
+	/**
+	 * 특정 등급의 구역별 좌석 수 조회
+	 */
+	@Query("SELECT s.section, COUNT(cs) FROM ConcertSeat cs " +
+			"JOIN cs.seat s " +
+			"WHERE cs.concert.id = :concertId AND cs.grade = :grade " +
+			"GROUP BY s.section")
+	List<Object[]> countSeatsByGradeAndSection(@Param("concertId") Long concertId,
+											   @Param("grade") SeatGrade grade);
 }

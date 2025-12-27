@@ -1,9 +1,8 @@
 package com.team03.ticketmon.seat.controller;
 
 import com.team03.ticketmon._global.exception.SuccessResponse;
+import com.team03.ticketmon.seat.dto.*;
 import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
-import com.team03.ticketmon.seat.dto.SeatLayoutResponseDTO;
-import com.team03.ticketmon.seat.dto.GradeLayoutResponseDTO;
 import com.team03.ticketmon.seat.service.SeatCacheInitService;
 import com.team03.ticketmon.seat.service.SeatLayoutService;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -93,6 +92,15 @@ public class SeatLayoutController {
         }
     }
 
+    @GetMapping("/{concertId}/grade-counts")
+    public ResponseEntity<SuccessResponse<List<GradeCountResponseDTO>>> getGradeCounts(
+            @PathVariable Long concertId) {
+
+        log.info("등급별 좌석 카운트 조회: concertId={}", concertId);
+        List<GradeCountResponseDTO> counts = seatLayoutService.getGradeCounts(concertId);
+        return ResponseEntity.ok(SuccessResponse.of("등급별 좌석 카운트 조회 성공", counts));
+    }
+
     @GetMapping("/{concertId}/seat-layout/grades/{gradeName}/sections/{sectionName}")
     public ResponseEntity<SuccessResponse<GradeLayoutResponseDTO>> getGradeSectionLayout(
             @PathVariable Long concertId,
@@ -121,5 +129,15 @@ public class SeatLayoutController {
             @PathVariable Long concertId) {
         String result = seatCacheInitService.clearSeatCache(concertId);
         return ResponseEntity.ok(SuccessResponse.of(result, null));
+    }
+
+    @GetMapping("/{concertId}/grades/{gradeName}/section-counts")
+    public ResponseEntity<SuccessResponse<List<SectionCountResponseDTO>>> getSectionCounts(
+            @PathVariable Long concertId,
+            @PathVariable String gradeName) {
+
+        log.info("구역별 좌석 카운트 조회: concertId={}, grade={}", concertId, gradeName);
+        List<SectionCountResponseDTO> counts = seatLayoutService.getSectionCounts(concertId, gradeName);
+        return ResponseEntity.ok(SuccessResponse.of("구역별 좌석 카운트 조회 성공", counts));
     }
 }
