@@ -1,6 +1,8 @@
 package com.team03.ticketmon.seat.controller;
 
 import com.team03.ticketmon._global.exception.SuccessResponse;
+import com.team03.ticketmon.concert.domain.Concert;
+import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.seat.dto.*;
 import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
 import com.team03.ticketmon.seat.service.SeatCacheInitService;
@@ -27,6 +29,7 @@ public class SeatLayoutController {
 
     private final SeatLayoutService seatLayoutService;
     private final SeatCacheInitService seatCacheInitService;
+    private final ConcertRepository concertRepository;
 
     /**
      * 콘서트 전체 좌석 배치도 조회
@@ -139,5 +142,13 @@ public class SeatLayoutController {
         log.info("구역별 좌석 카운트 조회: concertId={}, grade={}", concertId, gradeName);
         List<SectionCountResponseDTO> counts = seatLayoutService.getSectionCounts(concertId, gradeName);
         return ResponseEntity.ok(SuccessResponse.of("구역별 좌석 카운트 조회 성공", counts));
+    }
+
+    @DeleteMapping("/seat-cache/all")
+    public ResponseEntity<SuccessResponse<String>> clearAllSeatCache() {
+        // 모든 콘서트 조회 후 일괄 삭제
+        List<Concert> concerts = concertRepository.findAll();
+        concerts.forEach(c -> seatCacheInitService.clearSeatCache(c.getConcertId()));
+        return ResponseEntity.ok(SuccessResponse.of("전체 캐시 삭제 완료", null));
     }
 }
