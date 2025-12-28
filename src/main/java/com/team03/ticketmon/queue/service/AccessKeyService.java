@@ -55,7 +55,7 @@ public class AccessKeyService {
         long appliedTtl = currentTtlSeconds;
 
         // 4. 목표 TTL이 현재 남은 TTL보다 클 경우에만 유효 시간을 갱신 (단축 방지)
-        if (appliedTtl > 5000L && targetTtlSeconds > currentTtlSeconds) {
+        if (appliedTtl > 5 && targetTtlSeconds > currentTtlSeconds) {
             accessKeyBucket.expire(Duration.ofSeconds(targetTtlSeconds));
 
             RScoredSortedSet<Long> activeSessions = queueRedisAdapter.getActiveSessions(concertId);
