@@ -53,7 +53,7 @@ public record SeatDetailResponseDTO(
                 seat.getSeatNumber());
 
         return new SeatDetailResponseDTO(
-                seat.getSeatId(),
+                concertSeat.getConcertSeatId(),
                 seat.getSection(),
                 seat.getSeatRow(),
                 seat.getSeatNumber(),
