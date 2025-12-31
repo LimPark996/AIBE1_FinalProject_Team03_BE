@@ -5,12 +5,12 @@ import com.team03.ticketmon.concert.domain.Concert;
 import com.team03.ticketmon.concert.repository.ConcertRepository;
 import com.team03.ticketmon.seat.dto.*;
 import com.team03.ticketmon.seat.dto.GradePriceResponseDTO;
-import com.team03.ticketmon.seat.service.SeatCacheInitService;
 import com.team03.ticketmon.seat.service.SeatLayoutService;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,9 +28,11 @@ import java.util.List;
 public class SeatLayoutController {
 
     private final SeatLayoutService seatLayoutService;
-    private final SeatCacheInitService seatCacheInitService;
     private final ConcertRepository concertRepository;
+    private final RedissonClient redissonClient;
 
+    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
+    private static final String SEAT_STATUS_KEY_PREFIX = "seat:status:";
     /**
      * 콘서트 전체 좌석 배치도 조회
      * 실제 DB 데이터를 기반으로 좌석 정보, 가격, 예매 상태를 제공
@@ -127,13 +129,6 @@ public class SeatLayoutController {
         }
     }
 
-    @DeleteMapping("/{concertId}/seat-cache")
-    public ResponseEntity<SuccessResponse<String>> clearSeatCache(
-            @PathVariable Long concertId) {
-        String result = seatCacheInitService.clearSeatCache(concertId);
-        return ResponseEntity.ok(SuccessResponse.of(result, null));
-    }
-
     @GetMapping("/{concertId}/grades/{gradeName}/section-counts")
     public ResponseEntity<SuccessResponse<List<SectionCountResponseDTO>>> getSectionCounts(
             @PathVariable Long concertId,
@@ -142,13 +137,5 @@ public class SeatLayoutController {
         log.info("구역별 좌석 카운트 조회: concertId={}, grade={}", concertId, gradeName);
         List<SectionCountResponseDTO> counts = seatLayoutService.getSectionCounts(concertId, gradeName);
         return ResponseEntity.ok(SuccessResponse.of("구역별 좌석 카운트 조회 성공", counts));
-    }
-
-    @DeleteMapping("/seat-cache/all")
-    public ResponseEntity<SuccessResponse<String>> clearAllSeatCache() {
-        // 모든 콘서트 조회 후 일괄 삭제
-        List<Concert> concerts = concertRepository.findAll();
-        concerts.forEach(c -> seatCacheInitService.clearSeatCache(c.getConcertId()));
-        return ResponseEntity.ok(SuccessResponse.of("전체 캐시 삭제 완료", null));
     }
 }

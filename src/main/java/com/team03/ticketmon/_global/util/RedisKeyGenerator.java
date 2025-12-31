@@ -100,6 +100,8 @@ public class RedisKeyGenerator {
 
     public static final String SEAT_LAST_UPDATE_KEY_PREFIX = "seat:last_update:";
 
+    public static final String USER_RESERVED_KEY_PREFIX = "user:reserved:";
+
     // --- 🪑 Warm-up ---
 
     public static final String WARMUP_LOCK_KEY = "lock:seat:cache:warmup";
@@ -171,5 +173,50 @@ public class RedisKeyGenerator {
      */
     public String getFinalExpiryKey(Long concertId, Long userId) {
         return FINAL_EXPIRY_KEY_PREFIX + CONCERT_PREFIX + concertId + ":" + USER_PREFIX + userId;
+    }
+
+    /**
+     * 좌석 상태 키 생성 (venue capacity type에 따라 다른 구조)
+     *
+     * SMALL:  seat:status:{concertId}
+     * MEDIUM: seat:status:{concertId}:{grade}
+     * LARGE:  seat:status:{concertId}:{grade}:{section}
+     */
+    public static String getSeatStatusKey(String capacityType, Long concertId,
+                                          String grade, String section) {
+        if (capacityType == null) {
+            return SEAT_STATUS_KEY_PREFIX + concertId;
+        }
+
+        return switch (capacityType.toUpperCase()) {
+            case "SMALL" -> SEAT_STATUS_KEY_PREFIX + concertId;
+            case "MEDIUM" -> SEAT_STATUS_KEY_PREFIX + concertId + ":" + grade;
+            case "LARGE" -> SEAT_STATUS_KEY_PREFIX + concertId + ":" + grade + ":" + section;
+            default -> SEAT_STATUS_KEY_PREFIX + concertId;
+        };
+    }
+
+    /**
+     * 사용자 선점 좌석 키 생성
+     * user:reserved:{concertId}:{userId}
+     */
+    public static String getUserReservedKey(Long concertId, Long userId) {
+        return USER_RESERVED_KEY_PREFIX + concertId + ":" + userId;
+    }
+
+    /**
+     * 좌석 락 키 생성
+     * seat:lock:{concertId}:{seatId}
+     */
+    public static String getSeatLockKey(Long concertId, Long seatId) {
+        return SEAT_LOCK_KEY_PREFIX + concertId + ":" + seatId;
+    }
+
+    /**
+     * 좌석 TTL 키 생성
+     * seat:expire:{concertId}:{seatId}
+     */
+    public static String getSeatTTLKey(Long concertId, Long seatId) {
+        return SEAT_TTL_KEY_PREFIX + concertId + ":" + seatId;
     }
 }

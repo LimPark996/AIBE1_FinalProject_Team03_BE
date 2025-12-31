@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Concert Seat Repository
@@ -98,4 +99,26 @@ public interface ConcertSeatRepository extends JpaRepository<ConcertSeat, Long> 
 			"GROUP BY s.section")
 	List<Object[]> countSeatsByGradeAndSection(@Param("concertId") Long concertId,
 											   @Param("grade") SeatGrade grade);
+
+	/**
+	 * 콘서트의 등급 목록 조회
+	 */
+	@Query("SELECT DISTINCT cs.grade FROM ConcertSeat cs WHERE cs.concert.concertId = :concertId")
+	List<SeatGrade> findDistinctGradesByConcertId(@Param("concertId") Long concertId);
+
+	/**
+	 * 콘서트의 등급+구역 조합 목록 조회
+	 */
+	@Query("SELECT DISTINCT cs.grade, cs.seat.section FROM ConcertSeat cs " +
+			"WHERE cs.concert.concertId = :concertId " +
+			"ORDER BY cs.grade, cs.seat.section")
+	List<Object[]> findDistinctGradeSectionsByConcertId(@Param("concertId") Long concertId);
+
+	/**
+	 * ConcertSeat 조회 (Seat 정보 포함)
+	 */
+	@Query("SELECT cs FROM ConcertSeat cs " +
+			"JOIN FETCH cs.seat " +
+			"WHERE cs.concertSeatId = :concertSeatId")
+	Optional<ConcertSeat> findByIdWithSeat(@Param("concertSeatId") Long concertSeatId);
 }

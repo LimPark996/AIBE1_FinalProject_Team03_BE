@@ -16,15 +16,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/**
- * 좌석 캐시 자동 Warm-up 스케줄러
- * 기능:
- * - 예매 시작 10분 전에 자동으로 좌석 캐시 초기화
- * - 분산 락을 사용하여 중복 실행 방지
- * - 실패한 경우 재시도 로직 포함
- *
- * 스케줄링 주기: 5분마다 실행
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -35,32 +26,28 @@ public class SeatCacheWarmupScheduler {
     private final RedissonClient redissonClient;
     private final SeatProperties seatProperties;
 
-    // Redis 키 정의
     private static final String WARMUP_LOCK_KEY = RedisKeyGenerator.WARMUP_LOCK_KEY;
     private static final String SEAT_PROCESSED_CONCERT_KEY_PREFIX = RedisKeyGenerator.SEAT_PROCESSED_CONCERT_KEY_PREFIX;
 
-    /**
-     * 5분마다 실행되는 자동 캐시 Warm-up 스케줄러
-     * fixedDelay = 300000ms (5분)
-     */
-    @Scheduled(fixedDelay = 300000) // 5분마다 실행
+    @Scheduled(fixedDelay = 1200000) // 20분마다 실행
     public void autoWarmupSeatCache() {
         RLock lock = redissonClient.getLock(WARMUP_LOCK_KEY);
 
         try {
-            // 분산 락 획득 시도
-            boolean isLocked = lock.tryLock(seatProperties.getLock().getWaitTimeSeconds(), 
-                                          seatProperties.getLock().getLeaseTimeSeconds(), TimeUnit.SECONDS);
+            boolean isLocked = lock.tryLock(
+                    seatProperties.getLock().getWaitTimeSeconds(),
+                    seatProperties.getLock().getLeaseTimeSeconds(),
+                    TimeUnit.SECONDS);
 
             if (!isLocked) {
-                log.debug("다른 인스턴스에서 캐시 Warm-up이 실행 중입니다. 현재 스케줄러는 건너뜁니다.");
+                log.debug("다른 인스턴스에서 캐시 Warm-up 실행 중. 스킵.");
                 return;
             }
 
             log.info("===== 좌석 캐시 자동 Warm-up 스케줄러 시작 =====");
 
-            // 예매 시작이 임박한 콘서트들 조회
-            LocalDateTime targetTime = LocalDateTime.now().plusMinutes(seatProperties.getCache().getWarmupMinutesBefore());
+            LocalDateTime targetTime = LocalDateTime.now()
+                    .plusMinutes(seatProperties.getCache().getWarmupMinutesBefore());
             List<Concert> upcomingConcerts = findUpcomingBookingStarts(targetTime);
 
             log.info("Warm-up 대상 콘서트 개수: {}", upcomingConcerts.size());
@@ -70,106 +57,170 @@ public class SeatCacheWarmupScheduler {
                 return;
             }
 
-            // 각 콘서트별로 캐시 초기화 실행
             int successCount = 0;
             int failureCount = 0;
 
             for (Concert concert : upcomingConcerts) {
                 try {
-                    // 이미 처리된 콘서트인지 확인
                     if (isAlreadyProcessed(concert.getConcertId())) {
-                        log.debug("이미 처리된 콘서트입니다. concertId={}", concert.getConcertId());
+                        log.debug("이미 처리된 콘서트: concertId={}", concert.getConcertId());
                         continue;
                     }
 
-                    // 기존 캐시가 존재하면 먼저 삭제
-                    if (isSeatCacheExists(concert.getConcertId())) {
-                        log.info("기존 좌석 캐시 발견. 삭제 후 재초기화 진행: concertId={}, title={}", 
-                                concert.getConcertId(), concert.getTitle());
-                        String deleteResult = seatCacheInitService.clearSeatCache(concert.getConcertId());
-                        log.info("기존 캐시 삭제 완료: concertId={}, 결과={}", concert.getConcertId(), deleteResult);
-                    } else {
-                        log.debug("기존 좌석 캐시 없음. 바로 초기화 진행: concertId={}", concert.getConcertId());
-                    }
+                    String capacityType = concert.getVenueCapacityType();
+                    log.info("캐시 Warm-up 시작: concertId={}, title={}, capacityType={}",
+                            concert.getConcertId(), concert.getTitle(), capacityType);
 
-                    // 좌석 캐시 초기화 실행
-                    seatCacheInitService.initializeSeatCacheFromDB(concert.getConcertId());
+                    // ✅ capacityType에 따라 다르게 처리
+                    warmupByCapacityType(concert, capacityType);
 
-                    // 처리 완료 마킹
                     markAsProcessed(concert.getConcertId());
-
                     successCount++;
-                    log.info("좌석 캐시 Warm-up 성공: concertId={}, title={}, bookingStartDate={}",
-                            concert.getConcertId(), concert.getTitle(), concert.getBookingStartDate());
+
+                    log.info("캐시 Warm-up 성공: concertId={}, capacityType={}",
+                            concert.getConcertId(), capacityType);
 
                 } catch (Exception e) {
                     failureCount++;
-                    log.error("좌석 캐시 Warm-up 실패: concertId={}, title={}, error={}",
-                            concert.getConcertId(), concert.getTitle(), e.getMessage(), e);
+                    log.error("캐시 Warm-up 실패: concertId={}, error={}",
+                            concert.getConcertId(), e.getMessage(), e);
                 }
             }
 
-            log.info("===== 좌석 캐시 자동 Warm-up 완료: 성공={}, 실패={} =====",
+            log.info("===== 좌석 캐시 Warm-up 완료: 성공={}, 실패={} =====",
                     successCount, failureCount);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("캐시 Warm-up 스케줄러 실행 중 인터럽트 발생", e);
+            log.error("Warm-up 스케줄러 인터럽트", e);
         } catch (Exception e) {
-            log.error("캐시 Warm-up 스케줄러 실행 중 예외 발생", e);
+            log.error("Warm-up 스케줄러 예외", e);
         } finally {
-            // 락 해제
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
-                log.debug("캐시 Warm-up 스케줄러 락 해제 완료");
             }
         }
     }
 
     /**
-     * 예매 시작이 임박한 콘서트들을 조회합니다.
-     *
-     * @param targetTime 기준 시간 (현재 시간 + 10분)
-     * @return 예매 시작이 임박한 콘서트 목록
+     * capacityType에 따라 다른 Warm-up 전략 적용
      */
-    private List<Concert> findUpcomingBookingStarts(LocalDateTime targetTime) {
-        // 현재 시간부터 targetTime 사이에 예매가 시작되는 SCHEDULED 상태의 콘서트들을 조회
-        LocalDateTime now = LocalDateTime.now();
+    private void warmupByCapacityType(Concert concert, String capacityType) {
+        Long concertId = concert.getConcertId();
 
-        return concertRepository.findUpcomingBookingStarts(now, targetTime);
+        switch (capacityType != null ? capacityType : "SMALL") {
+            case "SMALL" -> {
+                // SMALL: 전체 초기화 (기존 방식)
+                clearExistingCache(concertId, capacityType);
+                seatCacheInitService.initializeSeatCacheFromDB(concertId);
+            }
+            case "MEDIUM" -> {
+                // MEDIUM: Lazy Loading이므로 Warm-up 스킵
+                // 또는 인기 등급(VIP, R)만 미리 초기화
+                log.info("MEDIUM venue는 Lazy Loading 적용. 선택적 Warm-up: concertId={}", concertId);
+                warmupPopularGrades(concertId, capacityType);
+            }
+            case "LARGE" -> {
+                // LARGE: Lazy Loading이므로 Warm-up 스킵
+                // 또는 인기 구역만 미리 초기화
+                log.info("LARGE venue는 Lazy Loading 적용. 선택적 Warm-up: concertId={}", concertId);
+                warmupPopularSections(concertId, capacityType);
+            }
+            default -> {
+                clearExistingCache(concertId, capacityType);
+                seatCacheInitService.initializeSeatCacheFromDB(concertId);
+            }
+        }
     }
 
     /**
-     * 이미 처리된 콘서트인지 확인
-     *
-     * @param concertId 콘서트 ID
-     * @return 처리 여부
+     * MEDIUM: 인기 등급만 미리 초기화
      */
+    private void warmupPopularGrades(Long concertId, String capacityType) {
+        // VIP, R 등급만 미리 초기화 (가장 인기 있는 등급들)
+        List<String> popularGrades = List.of("VIP", "R");
+
+        for (String grade : popularGrades) {
+            try {
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, grade, null);
+                if (!redissonClient.getMap(cacheKey).isExists()) {
+                    seatCacheInitService.initializeSectionCache(concertId, capacityType, grade, null);
+                    log.debug("MEDIUM Warm-up 완료: concertId={}, grade={}", concertId, grade);
+                }
+            } catch (Exception e) {
+                log.warn("MEDIUM Warm-up 실패: concertId={}, grade={}, error={}",
+                        concertId, grade, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * LARGE: 인기 구역만 미리 초기화
+     */
+    private void warmupPopularSections(Long concertId, String capacityType) {
+        // VIP FLOOR 구역만 미리 초기화 (가장 인기 있는 구역들)
+        List<String[]> popularSections = List.of(
+                new String[]{"VIP", "FLOOR-A"},
+                new String[]{"VIP", "FLOOR-B"},
+                new String[]{"R", "FLOOR-A"},
+                new String[]{"R", "FLOOR-B"}
+        );
+
+        for (String[] gradeSection : popularSections) {
+            String grade = gradeSection[0];
+            String section = gradeSection[1];
+
+            try {
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, grade, section);
+                if (!redissonClient.getMap(cacheKey).isExists()) {
+                    seatCacheInitService.initializeSectionCache(concertId, capacityType, grade, section);
+                    log.debug("LARGE Warm-up 완료: concertId={}, grade={}, section={}",
+                            concertId, grade, section);
+                }
+            } catch (Exception e) {
+                log.warn("LARGE Warm-up 실패: concertId={}, grade={}, section={}, error={}",
+                        concertId, grade, section, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 기존 캐시 삭제 (capacityType에 따라 다른 키 패턴)
+     */
+    private void clearExistingCache(Long concertId, String capacityType) {
+        try {
+            // SMALL은 단일 키
+            if ("SMALL".equals(capacityType) || capacityType == null) {
+                String key = RedisKeyGenerator.SEAT_STATUS_KEY_PREFIX + concertId;
+                if (redissonClient.getMap(key).isExists()) {
+                    redissonClient.getMap(key).delete();
+                    log.debug("SMALL 캐시 삭제: key={}", key);
+                }
+                return;
+            }
+
+            // MEDIUM/LARGE는 패턴 매칭으로 삭제
+            String pattern = RedisKeyGenerator.SEAT_STATUS_KEY_PREFIX + concertId + ":*";
+            redissonClient.getKeys().deleteByPattern(pattern);
+            log.debug("캐시 삭제 (패턴): pattern={}", pattern);
+
+        } catch (Exception e) {
+            log.warn("캐시 삭제 실패: concertId={}, error={}", concertId, e.getMessage());
+        }
+    }
+
+    private List<Concert> findUpcomingBookingStarts(LocalDateTime targetTime) {
+        LocalDateTime now = LocalDateTime.now();
+        return concertRepository.findUpcomingBookingStarts(now, targetTime);
+    }
+
     private boolean isAlreadyProcessed(Long concertId) {
         String key = SEAT_PROCESSED_CONCERT_KEY_PREFIX + concertId;
         return redissonClient.getBucket(key).isExists();
     }
 
-    /**
-     * 좌석 캐시가 이미 존재하는지 확인
-     *
-     * @param concertId 콘서트 ID
-     * @return 캐시 존재 여부
-     */
-    private boolean isSeatCacheExists(Long concertId) {
-        String seatCacheKey = RedisKeyGenerator.SEAT_STATUS_KEY_PREFIX + concertId;
-        return redissonClient.getMap(seatCacheKey).isExists() && !redissonClient.getMap(seatCacheKey).isEmpty();
-    }
-
-    /**
-     * 콘서트를 처리 완료로 마킹 (24시간 TTL)
-     *
-     * @param concertId 콘서트 ID
-     */
     private void markAsProcessed(Long concertId) {
-        String key = RedisKeyGenerator.SEAT_PROCESSED_CONCERT_KEY_PREFIX + concertId;
-        // 24시간 후 자동 삭제 (중복 처리 방지용)
+        String key = SEAT_PROCESSED_CONCERT_KEY_PREFIX + concertId;
         redissonClient.getBucket(key).set("processed", 24, TimeUnit.HOURS);
     }
-
 }

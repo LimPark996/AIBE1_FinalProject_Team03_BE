@@ -52,7 +52,7 @@ public class SeatProperties {
         /**
          * 사용자당 최대 선점 가능 좌석 수
          */
-        private int maxSeatCount = 2;
+        private int maxSeatCount = 4;
 
         /**
          * 마지막 업데이트 시간 캐시 TTL (시간)

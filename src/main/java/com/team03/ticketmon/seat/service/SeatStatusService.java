@@ -1,34 +1,30 @@
 package com.team03.ticketmon.seat.service;
 
 import com.team03.ticketmon._global.util.RedisKeyGenerator;
+import com.team03.ticketmon.concert.domain.Concert;
+import com.team03.ticketmon.concert.domain.ConcertSeat;
+import com.team03.ticketmon.concert.repository.ConcertRepository;
+import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
 import com.team03.ticketmon.seat.config.SeatProperties;
 import com.team03.ticketmon.seat.domain.SeatStatus;
 import com.team03.ticketmon.seat.domain.SeatStatus.SeatStatusEnum;
 import com.team03.ticketmon.seat.exception.SeatReservationException;
-import com.team03.ticketmon.concert.repository.ConcertSeatRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RMap;
+import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-/**
- * Redis Hash를 활용한 좌석 상태 관리 서비스
- * ✅ 수정사항:
- * - Cache-Aside 패턴 추가 (자동 캐시 초기화)
- * - SeatCacheInitService 의존성 추가
- * - 분산 락을 활용한 원자적 좌석 선점 처리
- * - 사용자별 좌석 선점 개수 제한 (최대 6개) 추가
- * - 현재 테스트 환경임을 고려하여 선점 개수 제한을 2개로 설정
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -36,40 +32,147 @@ public class SeatStatusService {
 
     private final RedissonClient redissonClient;
     private final SeatStatusEventPublisher eventPublisher;
-    private final SeatCacheInitService seatCacheInitService; // ✅ 추가된 필드
+    private final SeatCacheInitService seatCacheInitService;
     private final SeatProperties seatProperties;
     private final ConcertSeatRepository concertSeatRepository;
+    private final ConcertRepository concertRepository;
 
-    // Redis 키 패턴
     private static final String SEAT_STATUS_KEY_PREFIX = RedisKeyGenerator.SEAT_STATUS_KEY_PREFIX;
-    private static final String SEAT_LOCK_KEY_PREFIX = RedisKeyGenerator.SEAT_LOCK_KEY_PREFIX;
-    private static final String SEAT_TTL_KEY_PREFIX = RedisKeyGenerator.SEAT_TTL_KEY_PREFIX;
-
-    // 업데이트 시간 추적을 위한 키
     private static final String SEAT_LAST_UPDATE_KEY_PREFIX = RedisKeyGenerator.SEAT_LAST_UPDATE_KEY_PREFIX;
+    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
+
+    // ===== 사용자별 선점 좌석 관리 (신규) =====
 
     /**
-     * 수정된 전체 좌석 상태 조회 - Cache-Aside 패턴 적용
+     * 사용자 선점 목록에 좌석 추가
+     */
+    private void addToUserReservedSet(Long concertId, Long userId, Long seatId) {
+        String key = RedisKeyGenerator.getUserReservedKey(concertId, userId);
+        RSet<Long> userReservedSet = redissonClient.getSet(key);
+        userReservedSet.add(seatId);
+
+        // TTL 설정 (선점 시간 + 여유 5분)
+        userReservedSet.expire(Duration.ofMinutes(seatProperties.getReservation().getTtlMinutes() + 5));
+
+        log.debug("사용자 선점 목록 추가: userId={}, concertId={}, seatId={}", userId, concertId, seatId);
+    }
+
+    /**
+     * 사용자 선점 목록에서 좌석 제거
+     */
+    private void removeFromUserReservedSet(Long concertId, Long userId, Long seatId) {
+        String key = RedisKeyGenerator.getUserReservedKey(concertId, userId);
+        RSet<Long> userReservedSet = redissonClient.getSet(key);
+        userReservedSet.remove(seatId);
+
+        log.debug("사용자 선점 목록 제거: userId={}, concertId={}, seatId={}", userId, concertId, seatId);
+    }
+
+    /**
+     * 사용자가 선점한 좌석 ID 목록 조회 (빠름! SMEMBERS 최대 6개)
+     */
+    public Set<Long> getUserReservedSeatIds(Long concertId, Long userId) {
+        String key = RedisKeyGenerator.getUserReservedKey(concertId, userId);
+        RSet<Long> userReservedSet = redissonClient.getSet(key);
+        return userReservedSet.readAll();
+    }
+
+    // ===== 좌석 상태 조회 (capacity type별 분기) =====
+
+    /**
+     * 개별 좌석 상태 조회 - capacity type에 따라 다른 키 사용
+     */
+    public Optional<SeatStatus> getSeatStatus(Long concertId, Long concertSeatId) {
+        // 1. 콘서트 정보 조회
+        Concert concert = concertRepository.findById(concertId).orElse(null);
+        if (concert == null) {
+            log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
+            return Optional.empty();
+        }
+
+        String capacityType = concert.getVenueCapacityType();
+
+        // 2. SMALL은 기존 방식
+        if ("SMALL".equals(capacityType) || capacityType == null) {
+            return getSeatStatusSmall(concertId, concertSeatId);
+        }
+
+        // 3. MEDIUM/LARGE는 좌석 메타데이터 필요
+        return getSeatStatusByMetadata(concertId, concertSeatId, capacityType);
+    }
+
+    /**
+     * SMALL venue용 좌석 상태 조회 (기존 로직)
+     */
+    private Optional<SeatStatus> getSeatStatusSmall(Long concertId, Long concertSeatId) {
+        String key = SEAT_STATUS_KEY_PREFIX + concertId;
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+
+        SeatStatus status = seatMap.get(concertSeatId.toString());  // HGET O(1)
+
+        // 캐시 미스 시 초기화
+        if (status == null && !seatMap.isExists()) {
+            log.info("SMALL 캐시 초기화 시작: concertId={}", concertId);
+            seatCacheInitService.initializeSeatCacheFromDB(concertId);
+            status = seatMap.get(concertSeatId.toString());
+        }
+
+        return Optional.ofNullable(status);
+    }
+
+    /**
+     * MEDIUM/LARGE venue용 좌석 상태 조회
+     * 캐시 미스 시 해당 구역만 초기화 (Lazy Loading)
+     */
+    private Optional<SeatStatus> getSeatStatusByMetadata(Long concertId, Long concertSeatId,
+                                                         String capacityType) {
+        // 1. DB에서 좌석의 grade, section 조회
+        ConcertSeat concertSeat = concertSeatRepository.findByIdWithSeat(concertSeatId).orElse(null);
+        if (concertSeat == null) {
+            return Optional.empty();
+        }
+
+        String grade = concertSeat.getGrade().name();
+        String section = concertSeat.getSeat().getSection();
+
+        // 2. 적절한 키로 조회
+        String key = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, grade, section);
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+
+        SeatStatus status = seatMap.get(concertSeatId.toString());
+
+        // 3. 캐시 미스 시 해당 구역만 초기화 (Lazy!)
+        if (status == null && !seatMap.isExists()) {
+            log.info("Lazy 캐시 초기화: concertId={}, grade={}, section={}",
+                    concertId, grade, section);
+            seatCacheInitService.initializeSectionCache(concertId, capacityType, grade, section);
+            status = seatMap.get(concertSeatId.toString());
+        }
+
+        return Optional.ofNullable(status);
+    }
+
+    /**
+     * 전체 좌석 상태 조회 - SMALL venue 전용 (기존 호환)
+     * ⚠️ MEDIUM/LARGE에서는 사용 금지!
      */
     public Map<Long, SeatStatus> getAllSeatStatus(Long concertId) {
         String key = SEAT_STATUS_KEY_PREFIX + concertId;
         RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
 
-        Map<String, SeatStatus> rawMap = seatMap.readAllMap();
+        Map<String, SeatStatus> rawMap = seatMap.readAllMap();  // HGETALL
 
-        // Cache Miss 시 자동 초기화
+        // Cache Miss 시 초기화 (SMALL만!)
         if (rawMap.isEmpty()) {
             log.info("좌석 캐시가 비어있음. 자동 초기화 시작: concertId={}", concertId);
             try {
                 seatCacheInitService.initializeSeatCacheFromDB(concertId);
-                rawMap = seatMap.readAllMap(); // 좌석 캐시 재조회
-                log.info("좌석 캐시 자동 초기화 완료: concertId={}, 좌석수={}", concertId, rawMap.size());
+                rawMap = seatMap.readAllMap();
             } catch (Exception e) {
                 log.error("좌석 캐시 자동 초기화 실패: concertId={}", concertId, e);
             }
         }
 
-        // Cache Miss가 아닌 경우, rawMap의 형태를 Map<Long, SeatStatus>로 변환하여 반환
         return rawMap.entrySet().stream()
                 .collect(Collectors.toMap(
                         entry -> Long.valueOf(entry.getKey()),
@@ -78,119 +181,270 @@ public class SeatStatusService {
     }
 
     /**
-     * 개별 좌석 상태 조회 (user 상관 없음)
+     * 현재 좌석 상태 조회 (폴링 응답용)
+     * SMALL만 전체 데이터 반환, MEDIUM/LARGE는 등급/구역 파라미터 필요
      */
-    public Optional<SeatStatus> getSeatStatus(Long concertId, Long concertSeatId) {
-        String key = SEAT_STATUS_KEY_PREFIX + concertId;
-        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
-
-        SeatStatus status = seatMap.get(concertSeatId.toString());
-
-        // 캐시에 없고 전체 캐시도 비어있으면 초기화 시도
-        if (status == null && seatMap.size() == 0) {
-            log.info("개별 좌석 조회 시 캐시 비어있음. 초기화 시도: concertId={}, concertSeatId={}", concertId, concertSeatId);
-            try {
-                seatCacheInitService.initializeSeatCacheFromDB(concertId);
-                status = seatMap.get(concertSeatId.toString()); // 초기화 완료
-            } catch (Exception e) {
-                log.error("개별 좌석 조회 시 캐시 초기화 실패: concertId={}, concertSeatId={}", concertId, concertSeatId, e);
-            }
-        }
-
-        // 캐시에 있으면 or 초기화하면 해당 concertSeatId 좌석 상태 정보 반환
-        return Optional.ofNullable(status);
+    public Map<String, Object> getCurrentSeatStatus(Long concertId) {
+        return getCurrentSeatStatus(concertId, null, null);
     }
 
     /**
-     * 개별 좌석 상태 업데이트
-     * - Redis Hash에 좌석 상태 저장
-     * - 실시간 이벤트 발행으로 다른 사용자들에게 변경사항 알림
+     * 현재 좌석 상태 조회 (폴링 응답용)
+     * 파라미터 없이 호출하면 capacityType에 따라 다르게 동작
+     */
+    public Map<String, Object> getCurrentSeatStatus(Long concertId, String grade, String section) {
+        try {
+            Concert concert = concertRepository.findById(concertId).orElse(null);
+            if (concert == null) {
+                return Map.of("error", "콘서트를 찾을 수 없습니다");
+            }
+
+            String capacityType = concert.getVenueCapacityType();
+            LocalDateTime lastUpdate = getLastUpdateTime(concertId);
+
+            // SMALL: 전체 좌석 상태 반환 (grade, section 무시)
+            if ("SMALL".equals(capacityType) || capacityType == null) {
+                return getSmallVenueSeatStatus(concertId, lastUpdate);
+            }
+
+            // MEDIUM: grade 필수
+            if ("MEDIUM".equals(capacityType)) {
+                if (grade == null || grade.isEmpty()) {
+                    // 에러가 아니라 안내 메시지
+                    return Map.of(
+                            "capacityType", "MEDIUM",
+                            "hasUpdate", false,
+                            "requiresGrade", true,
+                            "message", "MEDIUM venue는 등급별 폴링이 필요합니다. grade 파라미터를 추가하세요.",
+                            "lastUpdate", lastUpdate != null ? lastUpdate.toString() : ""
+                    );
+                }
+                return getMediumVenueSeatStatus(concertId, grade, lastUpdate);
+            }
+
+            // LARGE: grade + section 필수
+            if ("LARGE".equals(capacityType)) {
+                if (grade == null || grade.isEmpty() || section == null || section.isEmpty()) {
+                    return Map.of(
+                            "capacityType", "LARGE",
+                            "hasUpdate", false,
+                            "requiresGradeAndSection", true,
+                            "message", "LARGE venue는 구역별 폴링이 필요합니다. grade와 section 파라미터를 추가하세요.",
+                            "lastUpdate", lastUpdate != null ? lastUpdate.toString() : ""
+                    );
+                }
+                return getLargeVenueSeatStatus(concertId, grade, section, lastUpdate);
+            }
+
+            return Map.of("error", "알 수 없는 capacityType: " + capacityType);
+
+        } catch (Exception e) {
+            log.error("현재 좌석 상태 조회 실패: concertId={}", concertId, e);
+            return Map.of("error", "조회 실패: " + e.getMessage());
+        }
+    }
+
+    /**
+     * SMALL venue 좌석 상태 조회
+     */
+    private Map<String, Object> getSmallVenueSeatStatus(Long concertId, LocalDateTime lastUpdate) {
+        Map<Long, SeatStatus> allStatus = getAllSeatStatus(concertId);
+
+        // 선점/예매된 좌석만 필터링 (AVAILABLE 제외)
+        Map<String, Object> reservedSeats = allStatus.entrySet().stream()
+                .filter(e -> e.getValue().getStatus() != SeatStatusEnum.AVAILABLE)
+                .collect(Collectors.toMap(
+                        e -> e.getKey().toString(),
+                        e -> createSeatStatusInfo(e.getValue())
+                ));
+
+        return Map.of(
+                "capacityType", "SMALL",
+                "hasUpdate", true,
+                "lastUpdate", lastUpdate != null ? lastUpdate.toString() : "",
+                "reservedSeats", reservedSeats,
+                "totalReserved", reservedSeats.size()
+        );
+    }
+
+    /**
+     * MEDIUM venue 좌석 상태 조회 (등급별)
+     */
+    private Map<String, Object> getMediumVenueSeatStatus(Long concertId, String grade, LocalDateTime lastUpdate) {
+        String cacheKey = RedisKeyGenerator.getSeatStatusKey("MEDIUM", concertId, grade, null);
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(cacheKey);
+
+        if (!seatMap.isExists()) {
+            return Map.of(
+                    "capacityType", "MEDIUM",
+                    "grade", grade,
+                    "hasUpdate", false,
+                    "message", "캐시가 초기화되지 않았습니다",
+                    "lastUpdate", lastUpdate != null ? lastUpdate.toString() : ""
+            );
+        }
+
+        Map<String, SeatStatus> allStatus = seatMap.readAllMap();
+
+        // 선점/예매된 좌석만 필터링
+        Map<String, Object> reservedSeats = allStatus.entrySet().stream()
+                .filter(e -> e.getValue().getStatus() != SeatStatusEnum.AVAILABLE)
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> createSeatStatusInfo(e.getValue())
+                ));
+
+        return Map.of(
+                "capacityType", "MEDIUM",
+                "grade", grade,
+                "hasUpdate", true,
+                "lastUpdate", lastUpdate != null ? lastUpdate.toString() : "",
+                "reservedSeats", reservedSeats,
+                "totalReserved", reservedSeats.size()
+        );
+    }
+
+    /**
+     * LARGE venue 좌석 상태 조회 (등급+구역별)
+     */
+    private Map<String, Object> getLargeVenueSeatStatus(Long concertId, String grade, String section, LocalDateTime lastUpdate) {
+        String cacheKey = RedisKeyGenerator.getSeatStatusKey("LARGE", concertId, grade, section);
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(cacheKey);
+
+        if (!seatMap.isExists()) {
+            return Map.of(
+                    "capacityType", "LARGE",
+                    "grade", grade,
+                    "section", section,
+                    "hasUpdate", false,
+                    "message", "캐시가 초기화되지 않았습니다",
+                    "lastUpdate", lastUpdate != null ? lastUpdate.toString() : ""
+            );
+        }
+
+        Map<String, SeatStatus> allStatus = seatMap.readAllMap();
+
+        // 선점/예매된 좌석만 필터링
+        Map<String, Object> reservedSeats = allStatus.entrySet().stream()
+                .filter(e -> e.getValue().getStatus() != SeatStatusEnum.AVAILABLE)
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> createSeatStatusInfo(e.getValue())
+                ));
+
+        return Map.of(
+                "capacityType", "LARGE",
+                "grade", grade,
+                "section", section,
+                "hasUpdate", true,
+                "lastUpdate", lastUpdate != null ? lastUpdate.toString() : "",
+                "reservedSeats", reservedSeats,
+                "totalReserved", reservedSeats.size()
+        );
+    }
+
+    /**
+     * 좌석 상태 정보 Map 생성 (폴링 응답용)
+     */
+    private Map<String, Object> createSeatStatusInfo(SeatStatus seat) {
+        Map<String, Object> info = new HashMap<>();
+        info.put("status", seat.getStatus().name());
+        info.put("seatInfo", seat.getSeatInfo());
+
+        if (seat.getUserId() != null) {
+            info.put("userId", seat.getUserId());
+        }
+        if (seat.getExpiresAt() != null) {
+            info.put("expiresAt", seat.getExpiresAt().toString());
+        }
+
+        return info;
+    }
+
+    /**
+     * 좌석 상태 업데이트 (이벤트 발행 없이)
+     */
+    public void updateSeatStatusWithoutEvent(SeatStatus seatStatus) {
+        Concert concert = concertRepository.findById(seatStatus.getConcertId())
+                .orElseThrow(() -> new IllegalArgumentException("콘서트를 찾을 수 없습니다"));
+
+        String capacityType = concert.getVenueCapacityType();
+        String grade = seatStatus.getGrade();
+        String section = seatStatus.getSection();
+
+        saveSeatStatus(capacityType, seatStatus.getConcertId(), grade, section, seatStatus);
+    }
+
+    /**
+     * 좌석 상태 업데이트 (이벤트 발행 포함)
      */
     public void updateSeatStatus(SeatStatus seatStatus) {
-        String key = SEAT_STATUS_KEY_PREFIX + seatStatus.getConcertId();
-        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+        updateSeatStatusWithoutEvent(seatStatus);
 
-        // 1. Redis에 좌석 상태 저장 (좌석 상태가 Reserved로 변경되었기 때문, 만료 시간도 null로!)
-        seatMap.put(seatStatus.getSeatId().toString(), seatStatus);
-
-        // 2. 콘서트 상태의 마지막 업데이트 시간 갱신
-        updateLastUpdateTime(seatStatus.getConcertId());
-
-        // 3. 실시간 이벤트 발행 -> 여러분 (화면을 보는 사람들) seatStatus 현황 공유드립니다 -> 화면 상에 현황 뜸
         try {
             eventPublisher.publishSeatUpdate(seatStatus);
         } catch (Exception e) {
-            log.warn("좌석 상태 이벤트 발행 실패 (서비스 계속 진행): concertId={}, seatId={}",
+            log.warn("좌석 상태 이벤트 발행 실패: concertId={}, seatId={}",
                     seatStatus.getConcertId(), seatStatus.getSeatId(), e);
         }
-
-        log.info("좌석 상태 업데이트: concertId={}, seatId={}, status={}",
-                seatStatus.getConcertId(), seatStatus.getSeatId(), seatStatus.getStatus());
     }
+    /**
+     * 특정 좌석 ID 목록의 상태만 조회 (HMGET 사용)
+     */
+    public Map<Long, SeatStatus> getSeatStatusByIds(Long concertId, List<Long> seatIds) {
+        if (seatIds == null || seatIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
 
-    public void updateSeatStatusWithoutEvent(SeatStatus seatStatus) {
-        String key = SEAT_STATUS_KEY_PREFIX + seatStatus.getConcertId();
+        String key = SEAT_STATUS_KEY_PREFIX + concertId;
         RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
 
-        // 1. Redis에 좌석 상태 저장 (좌석 상태가 Reserved로 변경되었기 때문, 만료 시간도 null로!)
-        seatMap.put(seatStatus.getSeatId().toString(), seatStatus);
+        Set<String> seatIdStrings = seatIds.stream()
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
 
-        // 2. 콘서트 상태의 마지막 업데이트 시간 갱신
-        updateLastUpdateTime(seatStatus.getConcertId());
+        Map<String, SeatStatus> result = seatMap.getAll(seatIdStrings);  // HMGET
+
+        return result.entrySet().stream()
+                .collect(Collectors.toMap(
+                        entry -> Long.valueOf(entry.getKey()),
+                        Map.Entry::getValue
+                ));
     }
 
-    /**
-     * 좌석 TTL 키 생성
-     */
-    private void createSeatTTLKey(Long concertId, Long concertSeatId) {
-        try {
-            String ttlKey = SEAT_TTL_KEY_PREFIX + concertId + ":" + concertSeatId;
-            RBucket<String> bucket = redissonClient.getBucket(ttlKey);
-
-            bucket.set("reserved", seatProperties.getReservation().getTtlMinutes(), TimeUnit.MINUTES);
-            log.debug("좌석 TTL 키 생성: key={}, ttl={}분", ttlKey, seatProperties.getReservation().getTtlMinutes());
-
-        } catch (Exception e) {
-            log.error("좌석 TTL 키 생성 실패: concertId={}, concertSeatId={}", concertId, concertSeatId, e);
+    public Map<Long, SeatStatus> getSeatStatusByIdsFromKey(String key, List<Long> seatIds) {
+        if (seatIds == null || seatIds.isEmpty()) {
+            return Collections.emptyMap();
         }
+
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+
+        Set<String> seatIdStrings = seatIds.stream()
+                .map(String::valueOf)
+                .collect(Collectors.toSet());
+
+        Map<String, SeatStatus> result = seatMap.getAll(seatIdStrings);
+
+        return result.entrySet().stream()
+                .collect(Collectors.toMap(
+                        e -> Long.valueOf(e.getKey()),
+                        Map.Entry::getValue
+                ));
     }
 
-    /**
-     * 좌석 TTL 키 삭제
-     */
-    private void removeSeatTTLKey(Long concertId, Long concertSeatId) {
-        try {
-            String ttlKey = SEAT_TTL_KEY_PREFIX + concertId + ":" + concertSeatId;
-            RBucket<String> bucket = redissonClient.getBucket(ttlKey);
-
-            boolean deleted = bucket.delete();
-            if (deleted) {
-                log.debug("좌석 TTL 키 삭제 완료: key={}", ttlKey);
-            } else {
-                log.debug("좌석 TTL 키 삭제 시도 - 키가 존재하지 않음: key={}", ttlKey);
-            }
-
-        } catch (Exception e) {
-            log.error("좌석 TTL 키 삭제 실패: concertId={}, concertSeatId={}", concertId, concertSeatId, e);
-        }
-    }
+    // ===== 사용자 선점 개수 검증 (HGETALL 제거!) =====
 
     /**
-     * 사용자별 좌석 선점 개수 검증
-     * Redis에서 현재 사용자가 선점한 좌석 개수를 확인하여 최대 제한을 초과하는지 검증
-     *
-     * @param concertId    콘서트 ID
-     * @param userId       사용자 ID
-     * @param targetSeatId 새로 선점하려는 좌석 ID (동일 좌석 재선점 시 제외용)
-     * @throws SeatReservationException 최대 선점 개수 초과 시
+     * 사용자별 좌석 선점 개수 검증 - SMEMBERS 사용 (빠름!)
      */
     private void validateUserSeatReservationLimit(Long concertId, Long userId, Long targetSeatId) {
-        List<SeatStatus> userReservedSeats = getUserReservedSeats(concertId, userId);
+        // 변경 전: getAllSeatStatus() → HGETALL 50,000건 ❌
+        // 변경 후: getUserReservedSeatIds() → SMEMBERS 최대 6건 ✅
 
-        // 현재 선점하려는 좌석이 이미 해당 사용자에 의해 선점된 상태라면 개수에서 제외
-        // (동일 좌석 재선점의 경우)
-        long currentReservationCount = userReservedSeats.stream()
-                .filter(seat -> !seat.getSeatId().equals(targetSeatId))
+        Set<Long> userReservedSeatIds = getUserReservedSeatIds(concertId, userId);
+
+        long currentReservationCount = userReservedSeatIds.stream()
+                .filter(id -> !id.equals(targetSeatId))
                 .count();
 
         int maxSeatCount = seatProperties.getReservation().getMaxSeatCount();
@@ -204,91 +458,74 @@ public class SeatStatusService {
             );
         }
 
-        log.debug("사용자 좌석 선점 개수 검증 통과: userId={}, concertId={}, currentCount={}, maxLimit={}",
-                userId, concertId, currentReservationCount, maxSeatCount);
+        log.debug("사용자 좌석 선점 개수 검증 통과: userId={}, currentCount={}, maxLimit={}",
+                userId, currentReservationCount, maxSeatCount);
     }
 
-    /**
-     * 좌석 임시 선점 메서드 (4개 매개변수 버전)
-     * - 좌석 가용성 확인과 선점 처리를 원자적으로 수행
-     * - Race Condition 방지 및 중복 예약 차단
-     * - TTL 키 생성으로 자동 만료 처리 지원
-     * - ✅ 사용자별 최대 6개 좌석 선점 제한 추가
-     *
-     * @param concertId     콘서트 ID
-     * @param concertSeatId 좌석 ID (ConcertSeat ID)
-     * @param userId        사용자 ID
-     * @param seatInfo      좌석 정보
-     * @return 선점된 좌석 상태
-     * @throws SeatReservationException 좌석 선점 실패 시
-     */
+    // ===== 좌석 선점 (수정됨) =====
+
     @Transactional
     public SeatStatus reserveSeat(Long concertId, Long concertSeatId, Long userId, String seatInfo) {
-        String lockKey = SEAT_LOCK_KEY_PREFIX + concertId + ":" + concertSeatId;
+        String lockKey = RedisKeyGenerator.getSeatLockKey(concertId, concertSeatId);
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
-            // 분산 락 획득 시도 (3초 대기, 10초 보유)
-            boolean acquired = lock.tryLock(seatProperties.getLock().getWaitTimeSeconds(),
-                    seatProperties.getLock().getLeaseTimeSeconds(), TimeUnit.SECONDS);
+            boolean acquired = lock.tryLock(
+                    seatProperties.getLock().getWaitTimeSeconds(),
+                    seatProperties.getLock().getLeaseTimeSeconds(),
+                    TimeUnit.SECONDS);
+
             if (!acquired) {
-                log.warn("좌석 락 획득 실패: concertId={}, concertSeatId={}, userId={}", concertId, concertSeatId, userId);
+                log.warn("좌석 락 획득 실패: concertId={}, seatId={}, userId={}",
+                        concertId, concertSeatId, userId);
                 throw new SeatReservationException("다른 사용자가 처리 중입니다. 잠시 후 다시 시도해주세요.");
             }
-            log.debug("좌석 락 획득 성공: concertId={}, concertSeatId={}, userId={}", concertId, concertSeatId, userId);
+
+            log.debug("좌석 락 획득 성공: concertId={}, seatId={}, userId={}",
+                    concertId, concertSeatId, userId);
 
             // === 임계 구역 시작 ===
 
-            // 1. 현재 좌석 상태 확인
-            Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
+            // 1. 콘서트 정보 조회
+            Concert concert = concertRepository.findById(concertId)
+                    .orElseThrow(() -> new IllegalArgumentException("콘서트를 찾을 수 없습니다: " + concertId));
+            String capacityType = concert.getVenueCapacityType();
 
-            // 기존 좌석 정보 추출 (grade, price 등 보존용)
-            String grade = null;
-            java.math.BigDecimal price = null;
-            String seatRow = null;
-            Integer seatNumber = null;
-            String section = null;
-            if (currentStatus.isPresent()) {
-                section = currentStatus.get().getSection();  // ← section 가져오기
-            }
+            // 2. 좌석 메타데이터 조회
+            ConcertSeat concertSeat = concertSeatRepository.findByIdWithSeat(concertSeatId)
+                    .orElseThrow(() -> new SeatReservationException("존재하지 않는 좌석입니다."));
+
+            String grade = concertSeat.getGrade().name();
+            String section = concertSeat.getSeat().getSection();
+
+            // 3. 현재 좌석 상태 확인
+            Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
 
             if (currentStatus.isPresent()) {
                 SeatStatus seat = currentStatus.get();
 
-                // 기존 좌석 정보 보존
-                grade = seat.getGrade();
-                price = seat.getPrice();
-                seatRow = seat.getSeatRow();
-                seatNumber = seat.getSeatNumber();
-
-                // 이미 예매 완료된 좌석
                 if (seat.getStatus() == SeatStatusEnum.BOOKED) {
                     throw new SeatReservationException("이미 예매 완료된 좌석입니다.");
                 }
 
-                // 현재 선점 중인 좌석 (만료 여부 확인)
                 if (seat.getStatus() == SeatStatusEnum.RESERVED) {
                     if (!seat.isExpired()) {
-                        // 같은 사용자의 재요청인지 확인
                         if (userId.equals(seat.getUserId())) {
-                            log.info("동일 사용자의 좌석 재선점 요청: concertId={}, concertSeatId={}, userId={}",
+                            log.info("동일 사용자의 좌석 재선점 요청: concertId={}, seatId={}, userId={}",
                                     concertId, concertSeatId, userId);
-                            return seat; // 기존 선점 상태 반환
+                            return seat;
                         } else {
                             throw new SeatReservationException("다른 사용자가 선점 중인 좌석입니다.");
                         }
-                    } else {
-                        log.info("만료된 선점 좌석 해제 후 재선점: concertId={}, concertSeatId={}",
-                                concertId, concertSeatId);
-                        // 만료된 선점은 아래에서 새로 선점 처리
                     }
+                    log.info("만료된 선점 좌석 재선점: concertId={}, seatId={}", concertId, concertSeatId);
                 }
             }
 
-            // ✅ 2. 사용자별 좌석 선점 개수 제한 검증 (새로 추가된 로직)
+            // 4. 사용자별 좌석 선점 개수 검증 (HGETALL 제거됨!)
             validateUserSeatReservationLimit(concertId, userId, concertSeatId);
 
-            // 3. 새로운 선점 처리 (기존 번호 2에서 3으로 변경)
+            // 5. 새로운 선점 상태 생성
             LocalDateTime now = LocalDateTime.now();
             LocalDateTime expiresAt = now.plusMinutes(seatProperties.getReservation().getTtlMinutes());
 
@@ -302,71 +539,99 @@ public class SeatStatusService {
                     .expiresAt(expiresAt)
                     .seatInfo(seatInfo)
                     .grade(grade)
-                    .price(price)
-                    .seatRow(seatRow)
-                    .seatNumber(seatNumber)
+                    .price(concertSeat.getPrice())
+                    .seatRow(concertSeat.getSeat().getSeatRow())
+                    .seatNumber(concertSeat.getSeat().getSeatNumber())
                     .section(section)
                     .build();
 
-            // 4. Redis에 저장 및 이벤트 발행
-            updateSeatStatus(reserved);
+            // 6. Redis에 저장 (capacity type에 따라 다른 키!)
+            saveSeatStatus(capacityType, concertId, grade, section, reserved);
 
-            // 5. 등급별 available 카운트 감소
+            // 7. 사용자 선점 목록에 추가 (신규!)
+            addToUserReservedSet(concertId, userId, concertSeatId);
+
+            // 8. 카운트 감소
             decrementAvailableCount(concertId, grade);
-
-            // 6. 구역별 available 카운트 감소
             decrementSectionAvailableCount(concertId, grade, section);
 
-            // 7. TTL 키 생성 (자동 만료 지원)
+            // 9. TTL 키 생성
             createSeatTTLKey(concertId, concertSeatId);
 
-            log.info("좌석 선점 완료: concertId={}, concertSeatId={}, userId={}, expiresAt={}, seatInfo={}",
-                    concertId, concertSeatId, userId, expiresAt, seatInfo);
+            // 10. 이벤트 발행
+            try {
+                eventPublisher.publishSeatUpdate(reserved);
+            } catch (Exception e) {
+                log.warn("좌석 상태 이벤트 발행 실패: concertId={}, seatId={}", concertId, concertSeatId, e);
+            }
+
+            log.info("좌석 선점 완료: concertId={}, seatId={}, userId={}, capacityType={}, expiresAt={}",
+                    concertId, concertSeatId, userId, capacityType, expiresAt);
 
             return reserved;
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.error("좌석 선점 중 인터럽트 발생: concertId={}, concertSeatId={}, userId={}", concertId, concertSeatId, userId, e);
+            log.error("좌석 선점 중 인터럽트: concertId={}, seatId={}, userId={}",
+                    concertId, concertSeatId, userId, e);
             throw new SeatReservationException("좌석 선점 처리가 중단되었습니다.");
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
-                log.debug("좌석 락 해제 완료: concertId={}, concertSeatId={}, userId={}", concertId, concertSeatId, userId);
+                log.debug("좌석 락 해제: concertId={}, seatId={}, userId={}",
+                        concertId, concertSeatId, userId);
             }
         }
     }
 
     /**
-     * 좌석 선점 해제 (AVAILABLE로 변경)
+     * 좌석 상태 저장 (capacity type에 따라 다른 키)
      */
+    private void saveSeatStatus(String capacityType, Long concertId, String grade,
+                                String section, SeatStatus seatStatus) {
+        String key = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, grade, section);
+        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
+        seatMap.put(seatStatus.getSeatId().toString(), seatStatus);
+
+        updateLastUpdateTime(concertId);
+
+        log.debug("좌석 상태 저장: key={}, seatId={}, status={}",
+                key, seatStatus.getSeatId(), seatStatus.getStatus());
+    }
+
+    // ===== 좌석 해제 (수정됨) =====
+
     public void releaseSeat(Long concertId, Long concertSeatId, Long userId) {
-        // 특정 콘서트의 특정 콘서트 좌석(사용자 상관없이) 상태 가져옴 -> Redis에서 가져오거나 없으면 DB에서 가져옴
         Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
-        // 만약 특정 콘서트의 특정 콘서트 좌석이 "존재하지 않는다면!"
+
         if (!currentStatus.isPresent()) {
-            log.warn("존재하지 않는 좌석 해제 시도: concertId={}, concertSeatId={}, userId={}",
+            log.warn("존재하지 않는 좌석 해제 시도: concertId={}, seatId={}, userId={}",
                     concertId, concertSeatId, userId);
             throw new SeatReservationException("존재하지 않는 좌석입니다.");
         }
-        // 만약 특정 콘서트의 특정 콘서트 좌석이 "존재한다면!" -> 좌석 상태 정보를 가져온다.
+
         SeatStatus currentSeat = currentStatus.get();
 
-        // 1. 좌석 상태가 RESERVED가 아니면서 BOOKED가 아니라면? -> 해제 불가능한 좌석 상태이다.
-        if (!currentSeat.isReserved() && currentSeat.getStatus() != SeatStatus.SeatStatusEnum.BOOKED) {
-            log.warn("해제 불가능한 좌석 상태: concertId={}, concertSeatId={}, userId={}, currentStatus={}",
-                    concertId, concertSeatId, userId, currentSeat.getStatus());
-            throw new SeatReservationException("해제할 수 없는 좌석 상태입니다. 현재 상태: " + currentSeat.getStatus());
+        // 상태 검증
+        if (!currentSeat.isReserved() && currentSeat.getStatus() != SeatStatusEnum.BOOKED) {
+            log.warn("해제 불가능한 좌석 상태: concertId={}, seatId={}, status={}",
+                    concertId, concertSeatId, currentSeat.getStatus());
+            throw new SeatReservationException("해제할 수 없는 좌석 상태입니다: " + currentSeat.getStatus());
         }
 
-        // 2. 좌석 상태가 RESERVED이거나 BOOKED이면? -> 해제 요청 사용자가 선점한 사용자와 일치하는지 확인 (권한 확인)
+        // 권한 검증
         if (!userId.equals(currentSeat.getUserId())) {
-            log.warn("권한 없는 좌석 해제 시도: concertId={}, concertSeatId={}, requestUserId={}, reservedUserId={}",
+            log.warn("권한 없는 좌석 해제: concertId={}, seatId={}, requestUserId={}, ownerUserId={}",
                     concertId, concertSeatId, userId, currentSeat.getUserId());
             throw new SeatReservationException("다른 사용자가 선점한 좌석은 해제할 수 없습니다.");
         }
 
-        // 3. 좌석 상태가 RESERVED이거나 BOOKED이면서 권한이 있다면? 좌석 상태를 AVAILABLE로 변경한다.
+        // 콘서트 정보 조회
+        Concert concert = concertRepository.findById(concertId)
+                .orElseThrow(() -> new IllegalArgumentException("콘서트를 찾을 수 없습니다"));
+        String capacityType = concert.getVenueCapacityType();
+
+        // 새 상태 생성
         SeatStatus updatedStatus = SeatStatus.builder()
                 .id(concertId + "-" + concertSeatId)
                 .concertId(concertId)
@@ -376,31 +641,164 @@ public class SeatStatusService {
                 .reservedAt(null)
                 .expiresAt(null)
                 .seatInfo(currentSeat.getSeatInfo())
+                .grade(currentSeat.getGrade())
+                .price(currentSeat.getPrice())
+                .seatRow(currentSeat.getSeatRow())
+                .seatNumber(currentSeat.getSeatNumber())
+                .section(currentSeat.getSection())
                 .build();
 
-        // Redis에 갱신하고 이벤트 발행한다.
-        updateSeatStatus(updatedStatus);
+        // Redis 저장 (capacity type에 따라 다른 키)
+        saveSeatStatus(capacityType, concertId, currentSeat.getGrade(),
+                currentSeat.getSection(), updatedStatus);
 
-        // 등급별 available 카운트 증가
+        // 사용자 선점 목록에서 제거 (신규!)
+        removeFromUserReservedSet(concertId, userId, concertSeatId);
+
+        // 카운트 증가
         incrementAvailableCount(concertId, currentSeat.getGrade());
-
-        // 구역별 available 카운트 증가
         incrementSectionAvailableCount(concertId, currentSeat.getGrade(), currentSeat.getSection());
 
-        // 4. TTL 키 삭제 (불필요한 Redis 키 만료 이벤트 방지)
+        // TTL 키 삭제
         removeSeatTTLKey(concertId, concertSeatId);
 
-        log.info("좌석 선점 해제 완료: concertId={}, concertSeatId={}, userId={}", concertId, concertSeatId, userId);
+        // 이벤트 발행
+        try {
+            eventPublisher.publishSeatUpdate(updatedStatus);
+        } catch (Exception e) {
+            log.warn("좌석 상태 이벤트 발행 실패: concertId={}, seatId={}", concertId, concertSeatId, e);
+        }
+
+        log.info("좌석 선점 해제 완료: concertId={}, seatId={}, userId={}",
+                concertId, concertSeatId, userId);
+    }
+
+    // ===== 사용자 선점 좌석 조회 (HGETALL 제거!) =====
+
+    /**
+     * 특정 사용자가 선점한 좌석 목록 조회
+     */
+    public List<SeatStatus> getUserReservedSeats(Long concertId, Long userId) {
+        // 1. 사용자 선점 좌석 ID 조회 (빠름!)
+        Set<Long> seatIds = getUserReservedSeatIds(concertId, userId);
+
+        if (seatIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 2. 해당 좌석들의 상태만 조회
+        return seatIds.stream()
+                .map(seatId -> getSeatStatus(concertId, seatId))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .filter(SeatStatus::isReserved)
+                .collect(Collectors.toList());
+    }
+
+    // ===== TTL 관리 =====
+
+    private void createSeatTTLKey(Long concertId, Long concertSeatId) {
+        try {
+            String ttlKey = RedisKeyGenerator.getSeatTTLKey(concertId, concertSeatId);
+            RBucket<String> bucket = redissonClient.getBucket(ttlKey);
+            bucket.set("reserved", seatProperties.getReservation().getTtlMinutes(), TimeUnit.MINUTES);
+            log.debug("좌석 TTL 키 생성: key={}, ttl={}분", ttlKey, seatProperties.getReservation().getTtlMinutes());
+        } catch (Exception e) {
+            log.error("좌석 TTL 키 생성 실패: concertId={}, seatId={}", concertId, concertSeatId, e);
+        }
+    }
+
+    private void removeSeatTTLKey(Long concertId, Long concertSeatId) {
+        try {
+            String ttlKey = RedisKeyGenerator.getSeatTTLKey(concertId, concertSeatId);
+            RBucket<String> bucket = redissonClient.getBucket(ttlKey);
+            bucket.delete();
+            log.debug("좌석 TTL 키 삭제: key={}", ttlKey);
+        } catch (Exception e) {
+            log.error("좌석 TTL 키 삭제 실패: concertId={}, seatId={}", concertId, concertSeatId, e);
+        }
+    }
+
+    // ===== 카운트 관리 =====
+
+    private void decrementAvailableCount(Long concertId, String grade) {
+        if (grade == null) return;
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
+            redissonClient.getAtomicLong(countKey).decrementAndGet();
+        } catch (Exception e) {
+            log.warn("available 카운트 감소 실패: concertId={}, grade={}", concertId, grade, e);
+        }
+    }
+
+    private void incrementAvailableCount(Long concertId, String grade) {
+        if (grade == null) return;
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
+            redissonClient.getAtomicLong(countKey).incrementAndGet();
+        } catch (Exception e) {
+            log.warn("available 카운트 증가 실패: concertId={}, grade={}", concertId, grade, e);
+        }
+    }
+
+    private void decrementSectionAvailableCount(Long concertId, String grade, String section) {
+        if (grade == null || section == null) return;
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
+            redissonClient.getAtomicLong(countKey).decrementAndGet();
+        } catch (Exception e) {
+            log.warn("구역 available 카운트 감소 실패: concertId={}, grade={}, section={}",
+                    concertId, grade, section, e);
+        }
+    }
+
+    private void incrementSectionAvailableCount(Long concertId, String grade, String section) {
+        if (grade == null || section == null) return;
+        try {
+            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
+            redissonClient.getAtomicLong(countKey).incrementAndGet();
+        } catch (Exception e) {
+            log.warn("구역 available 카운트 증가 실패: concertId={}, grade={}, section={}",
+                    concertId, grade, section, e);
+        }
+    }
+
+    private void updateLastUpdateTime(Long concertId) {
+        try {
+            String key = SEAT_LAST_UPDATE_KEY_PREFIX + concertId;
+            RBucket<LocalDateTime> bucket = redissonClient.getBucket(key);
+            bucket.set(LocalDateTime.now(), seatProperties.getReservation().getLastUpdateTtlHours(), TimeUnit.HOURS);
+        } catch (Exception e) {
+            log.warn("마지막 업데이트 시간 설정 실패: concertId={}", concertId, e);
+        }
     }
 
     /**
-     * 관리자용 좌석 강제 해제 (권한 검증 없음)
+     * 콘서트의 마지막 업데이트 시간 조회
      */
+    public LocalDateTime getLastUpdateTime(Long concertId) {
+        try {
+            String key = SEAT_LAST_UPDATE_KEY_PREFIX + concertId;
+            RBucket<LocalDateTime> bucket = redissonClient.getBucket(key);
+            return bucket.get();
+        } catch (Exception e) {
+            log.warn("마지막 업데이트 시간 조회 실패: concertId={}", concertId, e);
+            return null;
+        }
+    }
+
+    // ===== 관리자용 기능 =====
+
     public void forceReleaseSeat(Long concertId, Long concertSeatId) {
         Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
 
         if (currentStatus.isPresent()) {
             SeatStatus currentSeat = currentStatus.get();
+            Long previousUserId = currentSeat.getUserId();
+
+            Concert concert = concertRepository.findById(concertId)
+                    .orElseThrow(() -> new IllegalArgumentException("콘서트를 찾을 수 없습니다"));
+            String capacityType = concert.getVenueCapacityType();
 
             SeatStatus updatedStatus = SeatStatus.builder()
                     .id(concertId + "-" + concertSeatId)
@@ -411,327 +809,24 @@ public class SeatStatusService {
                     .reservedAt(null)
                     .expiresAt(null)
                     .seatInfo(currentSeat.getSeatInfo())
+                    .grade(currentSeat.getGrade())
+                    .section(currentSeat.getSection())
                     .build();
 
-            updateSeatStatus(updatedStatus);
+            saveSeatStatus(capacityType, concertId, currentSeat.getGrade(),
+                    currentSeat.getSection(), updatedStatus);
 
-            // 등급별 available 카운트 증가
+            // 사용자 선점 목록에서도 제거
+            if (previousUserId != null) {
+                removeFromUserReservedSet(concertId, previousUserId, concertSeatId);
+            }
+
             incrementAvailableCount(concertId, currentSeat.getGrade());
-
-            // 구역별 available 카운트 증가
             incrementSectionAvailableCount(concertId, currentSeat.getGrade(), currentSeat.getSection());
-
             removeSeatTTLKey(concertId, concertSeatId);
 
-            log.info("좌석 강제 해제 완료 (관리자): concertId={}, concertSeatId={}, previousUserId={}",
-                    concertId, concertSeatId, currentSeat.getUserId());
+            log.info("좌석 강제 해제 완료 (관리자): concertId={}, seatId={}, previousUserId={}",
+                    concertId, concertSeatId, previousUserId);
         }
-    }
-
-    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
-
-    /**
-     * 등급별 available 카운트 감소 (좌석 선점 시)
-     */
-    private void decrementAvailableCount(Long concertId, String grade) {
-        if (grade == null) return;
-
-        try {
-            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
-            long newCount = redissonClient.getAtomicLong(countKey).decrementAndGet();
-            log.debug("available 카운트 감소: concertId={}, grade={}, newCount={}", concertId, grade, newCount);
-        } catch (Exception e) {
-            log.warn("available 카운트 감소 실패: concertId={}, grade={}", concertId, grade, e);
-        }
-    }
-
-    /**
-     * 등급별 available 카운트 증가 (좌석 해제 시)
-     */
-    private void incrementAvailableCount(Long concertId, String grade) {
-        if (grade == null) return;
-
-        try {
-            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
-            long newCount = redissonClient.getAtomicLong(countKey).incrementAndGet();
-            log.debug("available 카운트 증가: concertId={}, grade={}, newCount={}", concertId, grade, newCount);
-        } catch (Exception e) {
-            log.warn("available 카운트 증가 실패: concertId={}, grade={}", concertId, grade, e);
-        }
-    }
-
-    /**
-     * 좌석 예매 완료 처리
-     * ⚠️ 사용하지 않는 메서드
-     */
-    public void bookSeat(Long concertId, Long concertSeatId) {
-        Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
-
-        if (currentStatus.isPresent() && currentStatus.get().isReserved()) {
-            SeatStatus currentSeat = currentStatus.get();
-
-            if (currentSeat.isExpired()) {
-                log.warn("만료된 선점 좌석 예매 시도: concertId={}, concertSeatId={}, userId={}",
-                        concertId, concertSeatId, currentSeat.getUserId());
-                throw new SeatReservationException("선점이 만료된 좌석입니다. 다시 선점해주세요.");
-            }
-
-            SeatStatus bookedStatus = SeatStatus.builder()
-                    .id(concertId + "-" + concertSeatId)
-                    .concertId(concertId)
-                    .seatId(concertSeatId)
-                    .status(SeatStatusEnum.BOOKED)
-                    .userId(currentSeat.getUserId())
-                    .reservedAt(currentSeat.getReservedAt())
-                    .expiresAt(null)
-                    .seatInfo(currentSeat.getSeatInfo())
-                    .build();
-
-            updateSeatStatus(bookedStatus);
-            removeSeatTTLKey(concertId, concertSeatId);
-
-            log.info("좌석 예매 완료: concertId={}, concertSeatId={}, userId={}",
-                    concertId, concertSeatId, currentSeat.getUserId());
-
-        } else {
-            String currentState = currentStatus.isPresent() ?
-                    currentStatus.get().getStatus().toString() : "NOT_FOUND";
-
-            log.warn("예매 불가능한 좌석 상태: concertId={}, concertSeatId={}, currentState={}",
-                    concertId, concertSeatId, currentState);
-            throw new SeatReservationException("선점되지 않은 좌석은 예매할 수 없습니다. 현재 상태: " + currentState);
-        }
-    }
-
-    /**
-     * 구역별 available 카운트 감소 (좌석 선점 시)
-     */
-    private void decrementSectionAvailableCount(Long concertId, String grade, String section) {
-        if (grade == null || section == null) return;
-
-        try {
-            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
-            long newCount = redissonClient.getAtomicLong(countKey).decrementAndGet();
-            log.debug("구역 available 카운트 감소: concertId={}, grade={}, section={}, newCount={}",
-                    concertId, grade, section, newCount);
-        } catch (Exception e) {
-            log.warn("구역 available 카운트 감소 실패: concertId={}, grade={}, section={}", concertId, grade, section, e);
-        }
-    }
-
-    /**
-     * 구역별 available 카운트 증가 (좌석 해제 시)
-     */
-    private void incrementSectionAvailableCount(Long concertId, String grade, String section) {
-        if (grade == null || section == null) return;
-
-        try {
-            String countKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
-            long newCount = redissonClient.getAtomicLong(countKey).incrementAndGet();
-            log.debug("구역 available 카운트 증가: concertId={}, grade={}, section={}, newCount={}",
-                    concertId, grade, section, newCount);
-        } catch (Exception e) {
-            log.warn("구역 available 카운트 증가 실패: concertId={}, grade={}, section={}", concertId, grade, section, e);
-        }
-    }
-
-    /**
-     * 만료된 선점 좌석들 정리 (시스템 운영용)
-     */
-    public void cleanupExpiredReservations(Long concertId) {
-        Map<Long, SeatStatus> allSeats = getAllSeatStatus(concertId);
-        LocalDateTime now = LocalDateTime.now();
-
-        for (SeatStatus seat : allSeats.values()) {
-            if (seat.isReserved() && seat.getExpiresAt() != null && now.isAfter(seat.getExpiresAt())) {
-                forceReleaseSeat(concertId, seat.getSeatId());
-                log.info("만료된 선점 좌석 해제: concertId={}, seatId={}, expiredUserId={}",
-                        concertId, seat.getSeatId(), seat.getUserId());
-            }
-        }
-    }
-
-    /**
-     * 특정 사용자가 특정 콘서트에서 선점한(Reserved 상태인) 좌석 조회
-     */
-    public List<SeatStatus> getUserReservedSeats(Long concertId, Long userId) {
-        Map<Long, SeatStatus> allSeats = getAllSeatStatus(concertId);
-
-        return allSeats.values().stream()
-                .filter(seat -> seat.isReserved() && userId.equals(seat.getUserId()))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 콘서트 좌석의 마지막 업데이트 시간 조회
-     */
-    public LocalDateTime getLastUpdateTime(Long concertId) {
-        try {
-            String key = SEAT_LAST_UPDATE_KEY_PREFIX + concertId;
-            RBucket<LocalDateTime> bucket = redissonClient.getBucket(key);
-            return bucket.get();
-        } catch (Exception e) {
-            log.warn("마지막 업데이트 시간 조회 중 오류: concertId={}", concertId, e);
-            return null;
-        }
-    }
-
-    /**
-     * 콘서트 좌석의 마지막 업데이트 시간 설정
-     */
-    private void updateLastUpdateTime(Long concertId) {
-        try {
-            String key = SEAT_LAST_UPDATE_KEY_PREFIX + concertId;
-            RBucket<LocalDateTime> bucket = redissonClient.getBucket(key);
-            bucket.set(LocalDateTime.now(), seatProperties.getReservation().getLastUpdateTtlHours(), TimeUnit.HOURS);
-        } catch (Exception e) {
-            log.warn("마지막 업데이트 시간 설정 중 오류: concertId={}", concertId, e);
-        }
-    }
-
-    /**
-     * 현재 좌석 상태 요약 조회 (폴링용)
-     */
-    public Map<String, Object> getCurrentSeatStatus(Long concertId) {
-        try {
-            Map<Long, SeatStatus> allSeats = getAllSeatStatus(concertId);
-
-            Map<String, Long> statusCounts = allSeats.values().stream()
-                    .collect(Collectors.groupingBy(
-                            seat -> seat.getStatus().toString(),
-                            Collectors.counting()
-                    ));
-
-            return Map.of(
-                    "concertId", concertId,
-                    "totalSeats", allSeats.size(),
-                    "statusCounts", statusCounts,
-                    "lastChecked", LocalDateTime.now()
-            );
-        } catch (Exception e) {
-            log.warn("현재 좌석 상태 조회 중 오류: concertId={}", concertId, e);
-            return Map.of(
-                    "concertId", concertId,
-                    "error", "상태 조회 실패",
-                    "lastChecked", LocalDateTime.now()
-            );
-        }
-    }
-
-    /**
-     * 캐시 → DB 백업 기능
-     * Redis 캐시에 있는 좌석 상태를 간단히 로깅만 수행
-     * (DB 구조상 캐시 상태를 직접 반영할 수 없음)
-     */
-    @Transactional(readOnly = true)
-    public Map<String, Object> backupCacheToDatabase(Long concertId) {
-        try {
-            log.info("캐시 상태 확인 시작: concertId={}", concertId);
-            
-            // Redis에서 모든 좌석 상태 조회
-            RMap<String, SeatStatus> seatMap = redissonClient.getMap(SEAT_STATUS_KEY_PREFIX + concertId);
-            Collection<SeatStatus> allSeats = seatMap.readAllValues();
-            
-            if (allSeats.isEmpty()) {
-                log.warn("확인할 캐시 데이터가 없습니다: concertId={}", concertId);
-                return Map.of(
-                    "message", "캐시 데이터 없음",
-                    "processedSeats", 0,
-                    "timestamp", LocalDateTime.now()
-                );
-            }
-            
-            // 상태별 통계 생성
-            Map<SeatStatusEnum, Long> statusCounts = allSeats.stream()
-                .collect(Collectors.groupingBy(
-                    SeatStatus::getStatus,
-                    Collectors.counting()
-                ));
-            
-            log.info("캐시 상태 확인 완료: concertId={}, totalSeats={}, breakdown={}", 
-                concertId, allSeats.size(), statusCounts);
-            
-            return Map.of(
-                "message", "캐시 상태 확인 완료",
-                "processedSeats", allSeats.size(),
-                "statusBreakdown", statusCounts.entrySet().stream()
-                    .collect(Collectors.toMap(
-                        entry -> entry.getKey().toString(),
-                        entry -> entry.getValue().intValue()
-                    )),
-                "note", "DB 구조상 캐시 상태를 직접 백업할 수 없습니다. 상태 확인만 수행됩니다.",
-                "timestamp", LocalDateTime.now()
-            );
-            
-        } catch (Exception e) {
-            log.error("캐시 상태 확인 중 오류: concertId={}", concertId, e);
-            throw new RuntimeException("상태 확인 실패: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * DB 좌석 초기화 기능
-     * 모든 좌석을 AVAILABLE 상태로 초기화
-     */
-    @Transactional
-    public Map<String, Object> resetAllSeatsToAvailable(Long concertId) {
-        try {
-            log.info("좌석 상태 초기화 시작: concertId={}", concertId);
-            
-            // DB에서 모든 좌석을 AVAILABLE로 업데이트
-            int updatedCount = concertSeatRepository.bulkUpdateAllSeatsToAvailable(concertId);
-            
-            log.info("좌석 상태 초기화 완료: concertId={}, updatedSeats={}", concertId, updatedCount);
-            
-            return Map.of(
-                "message", "초기화 완료",
-                "processedSeats", updatedCount,
-                "newStatus", "AVAILABLE",
-                "timestamp", LocalDateTime.now()
-            );
-            
-        } catch (Exception e) {
-            log.error("좌석 상태 초기화 중 오류: concertId={}", concertId, e);
-            throw new RuntimeException("초기화 실패: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 특정 좌석 ID 목록에 대한 상태만 조회 (HMGET 사용)
-     * HGETALL 대신 필요한 좌석만 조회하여 대규모 공연장 타임아웃 방지
-     */
-    public Map<Long, SeatStatus> getSeatStatusByIds(Long concertId, List<Long> seatIds) {
-        if (seatIds == null || seatIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        String key = SEAT_STATUS_KEY_PREFIX + concertId;
-        RMap<String, SeatStatus> seatMap = redissonClient.getMap(key);
-
-        // 캐시가 비어있으면 초기화
-        if (!seatMap.isExists() || seatMap.size() == 0) {
-            log.info("좌석 캐시가 비어있음. 자동 초기화: concertId={}", concertId);
-            try {
-                seatCacheInitService.initializeSeatCacheFromDB(concertId);
-            } catch (Exception e) {
-                log.error("좌석 캐시 초기화 실패: concertId={}", concertId, e);
-                return Collections.emptyMap();
-            }
-        }
-
-        // 필요한 좌석 ID들만 String으로 변환
-        Set<String> seatIdStrings = seatIds.stream()
-                .map(String::valueOf)
-                .collect(Collectors.toSet());
-
-        // HMGET으로 필요한 좌석만 조회 (O(n) where n = 요청 좌석 수)
-        Map<String, SeatStatus> result = seatMap.getAll(seatIdStrings);
-
-        // Long 키로 변환하여 반환
-        return result.entrySet().stream()
-                .collect(Collectors.toMap(
-                        entry -> Long.valueOf(entry.getKey()),
-                        Map.Entry::getValue
-                ));
     }
 }

@@ -2,6 +2,7 @@ package com.team03.ticketmon.seat.service;
 
 import com.team03.ticketmon._global.exception.BusinessException;
 import com.team03.ticketmon._global.exception.ErrorCode;
+import com.team03.ticketmon._global.util.RedisKeyGenerator;
 import com.team03.ticketmon.concert.domain.Concert;
 import com.team03.ticketmon.concert.domain.ConcertSeat;
 import com.team03.ticketmon.concert.domain.enums.SeatGrade;
@@ -14,6 +15,7 @@ import com.team03.ticketmon.venue.dto.VenueDTO;
 import com.team03.ticketmon.venue.service.VenueService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +25,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.redisson.api.RedissonClient;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.ArrayList;
 
@@ -40,6 +41,10 @@ public class SeatLayoutService {
     private final ConcertSeatRepository concertSeatRepository;
     private final VenueService venueService;
     private final SeatStatusService seatStatusService;
+    private final SeatCacheInitService seatCacheInitService;
+    private final RedissonClient redissonClient;
+
+    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
 
     /**
      * 콘서트의 전체 좌석 배치도 조회
@@ -135,10 +140,12 @@ public class SeatLayoutService {
 
         try {
             // 1. 콘서트 존재 여부 확인
-            if (!concertRepository.existsById(concertId)) {
-                log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
-                throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
-            }
+            Concert concert = concertRepository.findById(concertId)
+                    .orElseThrow(() -> {
+                        log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
+                        return new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
+                    });
+            String capacityType = concert.getVenueCapacityType();
 
             // 2. 입력값 검증
             if (gradeName == null || gradeName.trim().isEmpty()) {
@@ -155,33 +162,51 @@ public class SeatLayoutService {
                         "유효하지 않은 등급입니다: " + gradeName);
             }
 
-            // 4. 해당 콘서트의 특정 등급의 모든 좌석을 DB 에서 가져옴
+            // 4. Lazy Loading: MEDIUM이면 해당 등급 캐시 확인 후 초기화 (신규 추가!)
+            if ("MEDIUM".equals(capacityType)) {
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, gradeName, null);
+                RMap<String, SeatStatus> seatMap = redissonClient.getMap(cacheKey);
+
+                if (!seatMap.isExists()) {
+                    log.info("MEDIUM 등급별 Lazy 초기화: concertId={}, grade={}", concertId, gradeName);
+                    seatCacheInitService.initializeSectionCache(concertId, capacityType, gradeName, null);
+                }
+            }
+
+            // 5. 해당 콘서트의 특정 등급의 모든 좌석을 DB에서 가져옴
             List<ConcertSeat> concertSeats = concertSeatRepository
                     .findByConcertIdAndGrade(concertId, targetGrade);
 
             if (concertSeats.isEmpty()) {
-                log.warn("해당 등급에 좌석이 없습니다: concertId={}, grade={}", concertId, concertSeats);
+                log.warn("해당 등급에 좌석이 없습니다: concertId={}, grade={}", concertId, gradeName);
 
-                // 사용자 친화적 에러 메시지 (사용 가능한 등급 목록 제공)
-                List<String> availableGrades = concertSeats.stream()
-                        .map(cs -> cs.getGrade().name())
-                        .distinct()
+                List<String> availableGrades = concertSeatRepository
+                        .findDistinctGradesByConcertId(concertId).stream()
+                        .map(SeatGrade::name)
                         .sorted()
                         .collect(Collectors.toList());
-
-                log.info("사용 가능한 등급 목록: concertId={}, grades={}", concertId, availableGrades);
 
                 throw new BusinessException(ErrorCode.SEAT_NOT_FOUND,
                         String.format("'%s'등급을 찾을 수 없습니다. 사용 가능한 등급: %s",
                                 gradeName, String.join(", ", availableGrades)));
             }
-            // 5. Redis에서 실시간 상태 조회
+
+            // 6. Redis에서 실시간 상태 조회 (capacityType에 따라 다른 키 사용!)
             List<Long> seatIds = concertSeats.stream()
                     .map(ConcertSeat::getConcertSeatId)
                     .toList();
-            Map<Long, SeatStatus> seatStatuses = seatStatusService.getSeatStatusByIds(concertId, seatIds);
 
-            // 6. DB + Redis 합쳐서 DTO 변환
+            Map<Long, SeatStatus> seatStatuses;
+            if ("MEDIUM".equals(capacityType)) {
+                // MEDIUM: 등급별 키에서 조회
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, gradeName, null);
+                seatStatuses = seatStatusService.getSeatStatusByIdsFromKey(cacheKey, seatIds);
+            } else {
+                // SMALL: 기존 방식
+                seatStatuses = seatStatusService.getSeatStatusByIds(concertId, seatIds);
+            }
+
+            // 7. DB + Redis 합쳐서 DTO 변환
             List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
                     .map(cs -> {
                         SeatStatus status = seatStatuses.get(cs.getConcertSeatId());
@@ -204,11 +229,6 @@ public class SeatLayoutService {
                     "등급별 좌석 배치도 조회 중 오류가 발생했습니다.");
         }
     }
-
-    private static final String SEAT_COUNT_KEY_PREFIX = "seat:count:";
-
-    @Autowired
-    private RedissonClient redissonClient;  // 필드 추가
 
     /**
      * 등급별 좌석 카운트 조회 (빠른 조회용)
@@ -246,11 +266,13 @@ public class SeatLayoutService {
         log.info("등급 및 구역별 좌석 배치도 조회: concertId={}, grade={}, section={}", concertId, gradeName, sectionName);
 
         try {
-            // 1. 콘서트 존재 여부 확인
-            if (!concertRepository.existsById(concertId)) {
-                log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
-                throw new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
-            }
+            // 1. 콘서트 존재 여부 확인 + capacityType 가져오기
+            Concert concert = concertRepository.findById(concertId)
+                    .orElseThrow(() -> {
+                        log.warn("콘서트를 찾을 수 없음: concertId={}", concertId);
+                        return new BusinessException(ErrorCode.CONCERT_NOT_FOUND);
+                    });
+            String capacityType = concert.getVenueCapacityType();
 
             // 2. 입력값 검증
             if (gradeName == null || gradeName.trim().isEmpty()) {
@@ -272,23 +294,48 @@ public class SeatLayoutService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT, "구역명을 입력해주세요.");
             }
 
-            // 4. 해당 콘서트의 특정 등급 및 구역의 모든 좌석을 DB 에서 가져옴
+            // 4. Lazy Loading: LARGE면 해당 구역 캐시 확인 후 초기화 (신규 추가!)
+            if ("LARGE".equals(capacityType)) {
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, gradeName, sectionName);
+                RMap<String, SeatStatus> seatMap = redissonClient.getMap(cacheKey);
+
+                if (!seatMap.isExists()) {
+                    log.info("LARGE 구역별 Lazy 초기화: concertId={}, grade={}, section={}",
+                            concertId, gradeName, sectionName);
+                    seatCacheInitService.initializeSectionCache(concertId, capacityType, gradeName, sectionName);
+                }
+            }
+
+            // 5. 해당 콘서트의 특정 등급 및 구역의 모든 좌석을 DB에서 가져옴
             List<ConcertSeat> concertSeats = concertSeatRepository
                     .findByConcertIdAndGradeAndSection(concertId, targetGrade, sectionName);
 
             if (concertSeats.isEmpty()) {
-                log.warn("해당 등급 및 구역에 좌석이 없습니다: concertId={}, gradeSection={}", concertId, concertSeats);
-
-                throw new BusinessException(ErrorCode.SEAT_NOT_FOUND,"등급 또는 구역을 찾을 수 없습니다.");
+                log.warn("해당 등급 및 구역에 좌석이 없습니다: concertId={}, grade={}, section={}",
+                        concertId, gradeName, sectionName);
+                throw new BusinessException(ErrorCode.SEAT_NOT_FOUND, "등급 또는 구역을 찾을 수 없습니다.");
             }
 
-            // 5. Redis에서 실시간 상태 조회
+            // 6. Redis에서 실시간 상태 조회 (capacityType에 따라 다른 키 사용!)
             List<Long> seatIds = concertSeats.stream()
                     .map(ConcertSeat::getConcertSeatId)
                     .toList();
-            Map<Long, SeatStatus> seatStatuses = seatStatusService.getSeatStatusByIds(concertId, seatIds);
 
-            // 6. DB + Redis 합쳐서 DTO 변환
+            Map<Long, SeatStatus> seatStatuses;
+            if ("LARGE".equals(capacityType)) {
+                // LARGE: 등급+구역별 키에서 조회
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, gradeName, sectionName);
+                seatStatuses = seatStatusService.getSeatStatusByIdsFromKey(cacheKey, seatIds);
+            } else if ("MEDIUM".equals(capacityType)) {
+                // MEDIUM: 등급별 키에서 조회
+                String cacheKey = RedisKeyGenerator.getSeatStatusKey(capacityType, concertId, gradeName, null);
+                seatStatuses = seatStatusService.getSeatStatusByIdsFromKey(cacheKey, seatIds);
+            } else {
+                // SMALL: 기존 방식
+                seatStatuses = seatStatusService.getSeatStatusByIds(concertId, seatIds);
+            }
+
+            // 7. DB + Redis 합쳐서 DTO 변환
             List<SeatDetailResponseDTO> seatDetails = concertSeats.stream()
                     .map(cs -> {
                         SeatStatus status = seatStatuses.get(cs.getConcertSeatId());

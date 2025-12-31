@@ -711,6 +711,11 @@ public class SeatLockService {
                 .reservedAt(currentSeat.getReservedAt())
                 .expiresAt(null) // 만료 시간 제거 (영구 선점)
                 .seatInfo(currentSeat.getSeatInfo())
+                .grade(currentSeat.getGrade())
+                .section(currentSeat.getSection())
+                .price(currentSeat.getPrice())
+                .seatRow(currentSeat.getSeatRow())
+                .seatNumber(currentSeat.getSeatNumber())
                 .build();
     }
 
@@ -730,6 +735,11 @@ public class SeatLockService {
                 .reservedAt(currentSeat.getReservedAt())
                 .expiresAt(expiresAt) // 만료 시간 등록
                 .seatInfo(currentSeat.getSeatInfo())
+                .grade(currentSeat.getGrade())
+                .section(currentSeat.getSection())
+                .price(currentSeat.getPrice())
+                .seatRow(currentSeat.getSeatRow())
+                .seatNumber(currentSeat.getSeatNumber())
                 .build();
     }
 

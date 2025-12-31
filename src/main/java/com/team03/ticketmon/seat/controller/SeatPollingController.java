@@ -60,6 +60,9 @@ public class SeatPollingController {
             @Parameter(description = "마지막 업데이트 시간 (ISO 형식)", example = "2025-06-27T10:30:00")
             @RequestParam(required = false) String lastUpdateTime,
 
+            @RequestParam(required = false) String grade,
+            @RequestParam(required = false) String section,
+
             @Parameter(description = "폴링 타임아웃 (밀리초)", example = "30000")
             @RequestParam(defaultValue = "30000") long timeout,
 
@@ -146,7 +149,7 @@ public class SeatPollingController {
             LocalDateTime lastUpdate = parseLastUpdateTime(lastUpdateTime);
             if (lastUpdate != null && hasRecentUpdates(concertId, lastUpdate)) {
                 // 최근 변경사항이 있으면 즉시 현재 상태 응답
-                Map<String, Object> immediateResponse = getCurrentSeatStatusResponse(concertId);
+                Map<String, Object> immediateResponse = getCurrentSeatStatusResponse(concertId, grade, section);
                 deferredResult.setResult(ResponseEntity.ok(SuccessResponse.of("즉시 응답", immediateResponse)));
 
                 log.debug("즉시 응답 제공: concertId={}, userId={}, lastUpdate={}",
@@ -332,12 +335,11 @@ public class SeatPollingController {
     /**
      * 현재 좌석 상태 응답 생성 (SeatStatusService 연동)
      */
-    private Map<String, Object> getCurrentSeatStatusResponse(Long concertId) {
+    private Map<String, Object> getCurrentSeatStatusResponse(Long concertId, String grade, String section) {
         try {
-            // SeatStatusService를 통해 현재 좌석 상태 조회
-            Map<String, Object> seatStatus = seatStatusService.getCurrentSeatStatus(concertId);
+            Map<String, Object> seatStatus = seatStatusService.getCurrentSeatStatus(concertId, grade, section);
             LocalDateTime lastUpdateTime = seatStatusService.getLastUpdateTime(concertId);
-            
+
             return Map.of(
                     "hasUpdate", true,
                     "updateTime", lastUpdateTime != null ? lastUpdateTime : LocalDateTime.now(),
