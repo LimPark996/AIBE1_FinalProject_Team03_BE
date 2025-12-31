@@ -462,6 +462,81 @@ public class SeatStatusService {
                 userId, currentReservationCount, maxSeatCount);
     }
 
+    /**
+     * 좌석 예매 확정 (RESERVED → BOOKED)
+     * 결제 완료 후 호출됨
+     */
+    public void bookSeat(Long concertId, Long concertSeatId) {
+        log.info("좌석 예매 확정 시작: concertId={}, seatId={}", concertId, concertSeatId);
+
+        // 1. 현재 좌석 상태 조회
+        Optional<SeatStatus> currentStatus = getSeatStatus(concertId, concertSeatId);
+
+        if (currentStatus.isEmpty()) {
+            log.warn("존재하지 않는 좌석 예매 확정 시도: concertId={}, seatId={}", concertId, concertSeatId);
+            throw new SeatReservationException("존재하지 않는 좌석입니다.");
+        }
+
+        SeatStatus currentSeat = currentStatus.get();
+
+        // 2. 이미 BOOKED인 경우 스킵
+        if (currentSeat.getStatus() == SeatStatusEnum.BOOKED) {
+            log.info("이미 예매 완료된 좌석: concertId={}, seatId={}", concertId, concertSeatId);
+            return;
+        }
+
+        // 3. RESERVED 상태가 아니면 에러
+        if (currentSeat.getStatus() != SeatStatusEnum.RESERVED) {
+            log.warn("예매 확정 불가능한 좌석 상태: concertId={}, seatId={}, status={}",
+                    concertId, concertSeatId, currentSeat.getStatus());
+            throw new SeatReservationException("선점되지 않은 좌석은 예매할 수 없습니다.");
+        }
+
+        // 4. 콘서트 정보 조회
+        Concert concert = concertRepository.findById(concertId)
+                .orElseThrow(() -> new IllegalArgumentException("콘서트를 찾을 수 없습니다"));
+        String capacityType = concert.getVenueCapacityType();
+
+        // 5. BOOKED 상태로 변경
+        SeatStatus bookedSeat = SeatStatus.builder()
+                .id(currentSeat.getId())
+                .concertId(concertId)
+                .seatId(concertSeatId)
+                .status(SeatStatusEnum.BOOKED)  // ✅ BOOKED로 변경
+                .userId(currentSeat.getUserId())
+                .reservedAt(currentSeat.getReservedAt())
+                .expiresAt(null)  // BOOKED는 만료 없음
+                .seatInfo(currentSeat.getSeatInfo())
+                .grade(currentSeat.getGrade())
+                .price(currentSeat.getPrice())
+                .seatRow(currentSeat.getSeatRow())
+                .seatNumber(currentSeat.getSeatNumber())
+                .section(currentSeat.getSection())
+                .build();
+
+        // 6. Redis 저장
+        saveSeatStatus(capacityType, concertId, currentSeat.getGrade(),
+                currentSeat.getSection(), bookedSeat);
+
+        // 7. 사용자 선점 목록에서 제거 (BOOKED 되면 선점 목록에서 제외)
+        if (currentSeat.getUserId() != null) {
+            removeFromUserReservedSet(concertId, currentSeat.getUserId(), concertSeatId);
+        }
+
+        // 8. TTL 키 삭제 (BOOKED는 만료되지 않음)
+        removeSeatTTLKey(concertId, concertSeatId);
+
+        // 9. 이벤트 발행
+        try {
+            eventPublisher.publishSeatUpdate(bookedSeat);
+        } catch (Exception e) {
+            log.warn("좌석 예매 확정 이벤트 발행 실패: concertId={}, seatId={}", concertId, concertSeatId, e);
+        }
+
+        log.info("좌석 예매 확정 완료: concertId={}, seatId={}, userId={}",
+                concertId, concertSeatId, currentSeat.getUserId());
+    }
+
     // ===== 좌석 선점 (수정됨) =====
 
     @Transactional
