@@ -11,7 +11,7 @@ app:
 seat:
   reservation:
     ttl-minutes: 5 # 좌석 선점 유지 시간 (분)
-    max-seat-count: 2 # 사용자당 최대 선점 가능 좌석 수
+    max-seat-count: 4 # 사용자당 최대 선점 가능 좌석 수
     last-update-ttl-hours: 1 # 마지막 업데이트 시간 캐시 TTL (시간)
   polling:
     default-timeout-ms: 30000 # 기본 폴링 타임아웃 (ms)
