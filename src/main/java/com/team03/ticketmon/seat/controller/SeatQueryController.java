@@ -5,6 +5,7 @@ import com.team03.ticketmon.auth.jwt.CustomUserDetails;
 import com.team03.ticketmon.seat.domain.SeatStatus;
 import com.team03.ticketmon.seat.dto.SeatPriceResponse;
 import com.team03.ticketmon.seat.dto.SeatStatusResponseDTO;
+import com.team03.ticketmon.seat.service.SeatCacheInitService;
 import com.team03.ticketmon.seat.service.SeatPriceService;
 import com.team03.ticketmon.seat.service.SeatStatusService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,6 +39,7 @@ public class SeatQueryController {
 
     private final SeatStatusService seatStatusService;
     private final SeatPriceService seatPriceService;
+    private final SeatCacheInitService seatCacheInitService;
 
     @Operation(summary = "콘서트 전체 좌석 상태 조회", description = "특정 콘서트의 모든 좌석 상태를 조회합니다")
     @GetMapping("/concerts/{concertId}/status")
@@ -184,6 +186,62 @@ public class SeatQueryController {
             log.error("선택된 좌석 가격 조회 중 오류 발생: concertId={}, seatIds={}", concertId, seatIds, e);
             return ResponseEntity.status(500)
                     .body(SuccessResponse.of("좌석 가격 조회 중 오류가 발생했습니다.", null));
+        }
+    }
+
+    // ==================== 캐시 관리 API ====================
+
+    @Operation(summary = "특정 콘서트 좌석 캐시 삭제", description = "특정 콘서트의 좌석 관련 Redis 캐시를 삭제합니다 (관리자용)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "캐시 삭제 성공"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않는 콘서트"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @DeleteMapping("/concerts/{concertId}/cache")
+    public ResponseEntity<SuccessResponse<String>> clearSeatCache(
+            @Parameter(description = "콘서트 ID", required = true)
+            @PathVariable Long concertId) {
+
+        log.info("좌석 캐시 삭제 요청: concertId={}", concertId);
+
+        try {
+            String result = seatCacheInitService.clearSeatCache(concertId);
+
+            log.info("좌석 캐시 삭제 성공: concertId={}, result={}", concertId, result);
+            return ResponseEntity.ok(SuccessResponse.of("좌석 캐시 삭제 성공", result));
+
+        } catch (IllegalArgumentException e) {
+            log.warn("좌석 캐시 삭제 실패 - 콘서트 없음: concertId={}", concertId);
+            return ResponseEntity.status(404)
+                    .body(SuccessResponse.of(e.getMessage(), null));
+
+        } catch (Exception e) {
+            log.error("좌석 캐시 삭제 중 오류 발생: concertId={}", concertId, e);
+            return ResponseEntity.status(500)
+                    .body(SuccessResponse.of("좌석 캐시 삭제 중 오류가 발생했습니다.", null));
+        }
+    }
+
+    @Operation(summary = "전체 좌석 캐시 삭제", description = "모든 콘서트의 좌석 관련 Redis 캐시를 삭제합니다 (관리자용)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "전체 캐시 삭제 성공"),
+            @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @DeleteMapping("/cache")
+    public ResponseEntity<SuccessResponse<String>> clearAllSeatCache() {
+
+        log.info("전체 좌석 캐시 삭제 요청");
+
+        try {
+            String result = seatCacheInitService.clearAllSeatCache();
+
+            log.info("전체 좌석 캐시 삭제 성공: result={}", result);
+            return ResponseEntity.ok(SuccessResponse.of("전체 좌석 캐시 삭제 성공", result));
+
+        } catch (Exception e) {
+            log.error("전체 좌석 캐시 삭제 중 오류 발생", e);
+            return ResponseEntity.status(500)
+                    .body(SuccessResponse.of("전체 좌석 캐시 삭제 중 오류가 발생했습니다.", null));
         }
     }
 }
