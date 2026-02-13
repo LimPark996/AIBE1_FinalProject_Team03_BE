@@ -2,51 +2,63 @@ package com.team03.ticketmon._global.config.supabase;
 
 import lombok.Getter;
 import lombok.Setter;
+
+// → yml 파일의 설정값을 자바 클래스의 필드에 자동으로 매핑(연결)해주는 어노테이션
+// → @Value처럼 값을 하나씩 읽는 게 아니라, 관련 설정을 한 클래스에 묶어서 관리
 import org.springframework.boot.context.properties.ConfigurationProperties;
+
+// @Profile: 특정 환경에서만 활성화하는 ON/OFF 스위치
 import org.springframework.context.annotation.Profile;
 
 /**
  * Supabase 설정 값을 application.yml에서 바인딩해주는 구성 클래스입니다.
  *
- * <p>해당 클래스는 Spring Boot의 {@code @ConfigurationProperties}를 활용하여,
- * application.yml 또는 application-dev.yml 파일의 {@code supabase} 설정 항목을 자동으로 주입받습니다.</p>
+ * [ 쉬운 설명 ]
+ * 이 클래스는 "설정값 보관함" 역할을 함
+ * → yml 파일에 적어둔 Supabase 관련 설정값들을 자바 변수에 자동으로 담아주는 그릇
+ * → SupabaseConfig 클래스가 이 그릇에서 값을 꺼내 쓰는 구조
  *
- * <p>📌 현재 서비스는 Supabase Auth를 사용하지 않으며, 모든 Storage 요청은 **{@code service_role} 키**를 기반으로 처리됩니다.</p>
- * <p>⚠️ **주의:** {@code service_role} 키는 강력한 권한을 가지므로, 백엔드 서버에서만 사용하고 **절대 클라이언트(브라우저)에 노출되어서는 안 됩니다.**</p>
+ * yml 파일에 이렇게 적으면:
+ *   supabase:
+ *     url: https://xxx.supabase.co
+ *     key: eyJhbGci...
+ *     profile-bucket: profile-images
+ *     poster-bucket: poster-images
+ *     docs-bucket: seller-docs
  *
- * <ul>
- * <li>{@code supabase.url} : Supabase 프로젝트 기본 URL (API 엔드포인트)</li>
- * <li>{@code supabase.key} : Supabase API 키 (service_role 키 사용)</li>
- * <li>{@code supabase.profile-bucket} : 프로필 이미지 버킷 이름</li>
- * <li>{@code supabase.poster-bucket} : 포스터 이미지 버킷 이름</li>
- * <li>{@code supabase.docs-bucket} : 판매자 서류 버킷 이름</li>
- * </ul>
- *
- * <p>🎯 향후 AWS S3로 마이그레이션 시에도 이 구조를 유지하면서 설정값만 교체하면 되도록 설계되었습니다.</p>
+ * → 이 클래스의 url, key, profileBucket, posterBucket, docsBucket 변수에
+ *   각각의 값이 자동으로 들어감!
  */
+
 @Getter
 @Setter
 @Profile("supabase")
+
+// @ConfigurationProperties(prefix = "supabase")
+// → yml 파일에서 "supabase"로 시작하는 설정값들을 이 클래스의 필드에 자동 매핑함
+// @Value와의 차이:
+//   @Value: 값을 하나씩 개별적으로 읽어옴 → 변수가 많으면 코드가 지저분해짐
+//   @ConfigurationProperties: 관련 값을 한 클래스에 묶어서 관리 → 깔끔하고 재사용 편리
 @ConfigurationProperties(prefix = "supabase")
+
+// → Supabase 설정값들을 담는 "데이터 보관함" 클래스
+// → 이 클래스 자체는 로직(기능)이 없고, 순수하게 값만 저장하는 역할
+// → 이런 클래스를 "POJO(Plain Old Java Object)" 또는 "DTO 비슷한 것"이라고 부르기도 함
 public class SupabaseProperties {
 
-    /** Supabase 프로젝트의 URL (예: https://xxx.supabase.co) */
     private String url;
-
-    /**
-     * Supabase API 키 (service_role)
-     *
-     * <p>{@code service_role} 키를 사용하며, 백엔드에서만 접근하기 때문에 외부 노출 없이 안전하게 운용되어야 합니다.<br>
-     * Supabase Auth 인증을 사용하지 않는 구조이므로, 스토리지 접근 시 이 키를 통해 RLS를 우회합니다.</p>
-     */
     private String key;
-
-    /** 프로필 이미지가 저장될 버킷 이름 */
+    // ──────────────────────────────────────────────────────────
+    // 프로필 이미지가 저장될 버킷(Bucket) 이름
+    // → yml의 supabase.profile-bucket 값이 여기에 들어옴
+    //   (kebab-case → camelCase 자동 변환: profile-bucket → profileBucket)
+    //
+    // 버킷(Bucket)이란?
+    // → 파일을 분류해서 저장하는 "폴더" 같은 개념
+    // → 컴퓨터의 폴더처럼, 용도별로 파일을 나눠 보관하는 공간
+    // → 예: "profile-images"라는 버킷에는 사용자 프로필 사진만 저장
+    // ──────────────────────────────────────────────────────────
     private String profileBucket;
-
-    /** 포스터 이미지가 저장될 버킷 이름 */
     private String posterBucket;
-
-    /** 판매자 권한 신청 시 제출하는 증빙 서류(사업자등록증 등)를 저장하는 버킷 이름 */
     private String docsBucket;
 }

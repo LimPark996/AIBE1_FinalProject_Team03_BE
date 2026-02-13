@@ -19,7 +19,6 @@ public class OAuthAttributes {
     private String providerId;
 
     public static final String GOOGLE = "google";
-    public static final String NAVER = "naver";
     public static final String KAKAO = "kakao";
 
     public static OAuthAttributes of(String registrationId, Map<String, Object> attributes) {
@@ -27,9 +26,6 @@ public class OAuthAttributes {
         switch (registrationId) {
             case GOOGLE :
                 return ofGoogle("sub", attributes);
-            case NAVER :
-                Map<String, Object> response = (Map<String, Object>) attributes.get("response");
-                return ofNaver("id", response);
             case KAKAO:
                 return ofKakao("id", attributes);
             default:
@@ -45,20 +41,6 @@ public class OAuthAttributes {
                 .nameAttributeKey(key)
                 .providerId((String) attrs.get(key))
                 .provider(GOOGLE)
-                .build();
-    }
-
-    private static OAuthAttributes ofNaver(String key, Map<String, Object> resp) {
-        if (resp == null)
-            throw new OAuth2AuthenticationException("네이버 사용자 정보가 없습니다.");
-
-        return OAuthAttributes.builder()
-                .name((String) resp.get("name"))
-                .email((String) resp.get("email"))
-                .attributes(resp)
-                .nameAttributeKey(key)
-                .providerId((String) resp.get(key))
-                .provider(NAVER)
                 .build();
     }
 
