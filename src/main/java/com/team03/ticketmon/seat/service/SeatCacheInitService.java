@@ -86,7 +86,28 @@ public class SeatCacheInitService {
 
         seatMap.putAll(batchData);
 
+        initializeSectionCounts(concertId, grade, section, batchData.values());
+
         log.info("구역 캐시 초기화 완료: key={}, 좌석수={}", key, batchData.size());
+    }
+
+    /**
+     * 구역 초기화 시 카운트도 초기화 (신규 추가)
+     */
+    private void initializeSectionCounts(Long concertId, String grade, String section, Collection<SeatStatus> seats) {
+        long availableCount = seats.stream()
+                .filter(seat -> seat.getStatus() == SeatStatusEnum.AVAILABLE)
+                .count();
+
+        // 구역별 카운트 초기화
+        String sectionCountKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":" + section + ":available";
+        redissonClient.getAtomicLong(sectionCountKey).set(availableCount);
+        log.info("구역 카운트 초기화: key={}, count={}", sectionCountKey, availableCount);
+
+        // 등급별 카운트도 업데이트 (누적)
+        String gradeCountKey = SEAT_COUNT_KEY_PREFIX + concertId + ":" + grade + ":available";
+        redissonClient.getAtomicLong(gradeCountKey).addAndGet(availableCount);
+        log.info("등급 카운트 누적: key={}, added={}", gradeCountKey, availableCount);
     }
 
     /**

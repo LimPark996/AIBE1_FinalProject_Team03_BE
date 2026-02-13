@@ -1,172 +1,432 @@
+# ════════════════════════════════════════════════════════════
+# 🎫 TicketMon-Go 운영(Production) 환경 설정 파일
+# 📄 파일명: application-prod.yml
+# ════════════════════════════════════════════════════════════
+# 이 파일은 spring.profiles.active=prod 일 때만 로드됩니다.
+# application.yml(공통 설정)을 먼저 읽은 뒤, 이 파일의 설정이 "덮어쓰기" 됩니다.
+#
+# ⚠️ 핵심 원칙: 운영 환경의 모든 민감 정보(비밀번호, API 키 등)는
+#    절대 이 파일에 직접 적지 않고, ${환경변수명} 형태로 외부에서 주입받습니다.
+#    환경 변수는 .env 파일, Docker, AWS 파라미터 스토어 등에서 관리합니다.
+# ════════════════════════════════════════════════════════════
+
 spring:
-  # Spring Boot 자동 설정을 제외할 항목을 명시
-  # AWS S3 자동 설정은 's3' 프로필에서 관리되므로, prod 환경에서 기본적으로 제외
+  # ────────────────────────────────────────────────────────
+  # 🚫 자동 설정 제외 (Auto Configuration Exclude)
+  # ────────────────────────────────────────────────────────
+  # Spring Boot는 클래스패스에 AWS S3 라이브러리가 있으면 자동으로 S3 관련 빈을 생성합니다.
+  # 하지만 우리는 's3' 프로필에서 직접 S3 설정을 관리하므로,
+  # 자동 설정이 충돌하지 않도록 여기서 제외합니다.
   autoconfigure:
     exclude:
       - io.awspring.cloud.autoconfigure.s3.S3AutoConfiguration
 
-  # 'prod' 프로필이 활성화될 때 's3' 프로필도 함께 포함
-  # 이를 통해 운영 환경에서는 S3 관련 빈만 로드됨
+  # ────────────────────────────────────────────────────────
+  # 🔀 프로필 포함 (Profile Include)
+  # ────────────────────────────────────────────────────────
+  # prod 프로필이 활성화되면 's3' 프로필도 함께 활성화합니다.
+  # 이렇게 하면 S3 관련 빈(@Profile("s3")이 붙은 클래스)이 자동으로 로드됩니다.
+  # 결과적으로 운영 환경에서는 항상 S3 파일 저장소를 사용하게 됩니다.
   profiles:
     include: s3
 
-  # 운영 데이터베이스 연결 설정
-  # 모든 값은 환경 변수로부터 주입 (보안상 민감 정보 직접 노출 금지)
+  # ────────────────────────────────────────────────────────
+  # 🗄️ 데이터베이스(MySQL) 연결 설정
+  # ────────────────────────────────────────────────────────
+  # DataSource란? Java 애플리케이션이 데이터베이스에 연결하기 위한 설정 객체입니다.
+  # Spring Boot는 이 설정을 읽어 자동으로 DB 커넥션 풀(HikariCP)을 생성합니다.
+  #
+  # 커넥션 풀(Connection Pool)이란?
+  # DB 연결을 미리 여러 개 만들어 놓고 재사용하는 기법입니다.
+  # 매 요청마다 새 연결을 만드는 것보다 훨씬 빠릅니다.
   datasource:
+    # JDBC URL — 데이터베이스의 주소입니다.
+    # 형식: jdbc:mysql://호스트:포트/데이터베이스명
+    # 환경 변수 DB_URL에서 값을 가져옵니다.
     url: ${DB_URL}
+
+    # DB 접속 계정 정보 — 환경 변수에서 주입
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+
+    # JDBC 드라이버 클래스명 — MySQL 8.x 버전용 드라이버
+    # 드라이버란? Java가 특정 DB와 통신하기 위한 라이브러리입니다.
+    # MySQL은 com.mysql.cj.jdbc.Driver, PostgreSQL은 org.postgresql.Driver 등
     driver-class-name: com.mysql.cj.jdbc.Driver
 
-  # JPA (Hibernate) 관련 설정
+  # ────────────────────────────────────────────────────────
+  # 🏗️ JPA / Hibernate 설정
+  # ────────────────────────────────────────────────────────
+  # JPA(Java Persistence API)란?
+  #   Java 객체와 데이터베이스 테이블을 자동으로 매핑해주는 기술 표준입니다.
+  #   예: User 클래스 ↔ users 테이블
+  #
+  # Hibernate란?
+  #   JPA 표준을 실제로 구현한 라이브러리입니다. (가장 많이 사용됨)
   jpa:
     hibernate:
-      ddl-auto: update             # 운영 환경에서는 DDL 자동 변경을 금지하고 스키마 유효성만 검사
-    show-sql: false                  # 운영 환경에서는 SQL 쿼리 출력을 비활성화하여 성능 및 보안을 강화
-    #    properties:
-    #     hibernate:
-    #       format_sql: false # 운영 환경에서는 쿼리 포맷팅도 성능에 영향을 줄 수 있으므로 비활성화가 권장
-    # 이 설정이 필요하다면 주석을 해제하고 'false'로 명시해주세요.
+      # DDL 자동 처리 방식 — 애플리케이션 시작 시 테이블 구조를 어떻게 할지 결정
+      #
+      # 옵션 설명:
+      #   none     : 아무것도 하지 않음
+      #   validate : 엔티티와 테이블 구조가 일치하는지 확인만 함 (불일치 시 에러)
+      #   update   : 엔티티에 맞게 테이블을 자동 수정 (컬럼 추가 등)
+      #   create   : 기존 테이블을 삭제하고 새로 생성 (데이터 삭제됨!)
+      #   create-drop : create와 같지만 앱 종료 시 테이블도 삭제
+      #
+      # ⚠️ 운영 환경에서는 'validate' 또는 'none'이 권장됩니다.
+      #    'update'는 예상치 못한 스키마 변경이 발생할 수 있어 위험합니다.
+      #    현재는 update로 되어 있지만, 안정화 후 validate로 변경하는 것을 권장합니다.
+      ddl-auto: update
 
-  # Redis 연결 설정
-  # 모든 값은 환경 변수로부터 주입
+    # SQL 쿼리 로그 출력 여부
+    # true: Hibernate가 실행하는 모든 SQL을 콘솔에 출력 (개발 시 유용)
+    # false: 출력하지 않음 (운영 환경에서는 성능과 보안을 위해 꺼야 합니다)
+    show-sql: false
+
+  # ────────────────────────────────────────────────────────
+  # 🔴 Redis 연결 설정
+  # ────────────────────────────────────────────────────────
+  # Redis란?
+  #   메모리 기반의 초고속 데이터 저장소입니다.
+  #   주로 캐시(자주 쓰는 데이터 임시 저장), 세션 관리, 대기열,
+  #   분산 락(여러 서버 간 동기화) 등에 사용됩니다.
+  #
+  # 이 프로젝트에서는 좌석 캐시, 대기열 관리, 분산 락 등에 Redis를 활용합니다.
   data:
     redis:
+      # Redis 서버 주소 — 운영 환경에서는 AWS ElastiCache 등 관리형 서비스를 주로 사용
       host: ${SPRING_DATA_REDIS_HOST}
+
+      # Redis 포트 — 기본 포트는 6379
       port: ${SPRING_DATA_REDIS_PORT}
+
+      # Redis 인증 정보 — 운영 Redis는 반드시 인증을 설정해야 합니다
       username: ${SPRING_DATA_REDIS_USERNAME}
       password: ${SPRING_DATA_REDIS_PASSWORD}
+
       ssl:
+        # SSL(보안 연결) 활성화
+        # true: Redis와의 통신을 암호화합니다.
+        # 운영 환경에서는 데이터가 네트워크를 통해 전송되므로 반드시 활성화해야 합니다.
         enabled: true
 
+  # ────────────────────────────────────────────────────────
+  # 🔐 OAuth2 소셜 로그인 설정
+  # ────────────────────────────────────────────────────────
+  # OAuth2란?
+  #   사용자가 우리 서비스에 직접 회원가입하지 않고,
+  #   Google/Kakao 같은 외부 서비스의 계정으로 로그인할 수 있게 해주는 인증 표준입니다.
+  #
+  # 동작 흐름 (Authorization Code 방식):
+  #   1. 사용자가 "구글로 로그인" 버튼 클릭
+  #   2. 구글 로그인 페이지로 이동 (authorization-uri)
+  #   3. 사용자가 구글에서 로그인 및 권한 승인
+  #   4. 구글이 우리 서버의 redirect-uri로 "인가 코드"를 전달
+  #   5. 우리 서버가 인가 코드로 "액세스 토큰"을 요청 (token-uri)
+  #   6. 액세스 토큰으로 사용자 정보를 조회 (user-info-uri)
+  #   7. 받은 사용자 정보로 로그인/회원가입 처리
   security:
     oauth2:
       client:
+        # ── registration: 우리 앱을 각 소셜 서비스에 등록한 정보 ──
         registration:
+
+          # ─── Google 로그인 설정 ───
           google:
+            # Google Cloud Console에서 발급받은 클라이언트 ID와 Secret
+            # OAuth 앱을 식별하는 고유 값입니다.
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
             client-name: Google
+
+            # 인증 방식 — authorization_code는 가장 안전한 표준 방식
             authorization-grant-type: authorization_code
+
+            # 구글 로그인 완료 후 사용자가 돌아올 우리 서버의 URL
+            # 구글이 이 URL로 인가 코드를 전달합니다.
             redirect-uri: 'https://ticklingticket.com/login/oauth2/code/google'
+
+            # 구글에게 요청할 사용자 정보 범위
+            # profile: 이름, 프로필 사진 등
+            # email: 이메일 주소
             scope:
               - profile
               - email
-          naver:
-            client-id: ${NAVER_CLIENT_ID}
-            client-secret: ${NAVER_CLIENT_SECRET}
-            client-name: Naver
-            authorization-grant-type: authorization_code
-            redirect-uri: 'https://ticklingticket.com/login/oauth2/code/naver'
-            scope:
-              - name
-              - email
-            provider: naver
+
+          # ─── Kakao 로그인 설정 ───
           kakao:
             client-id: ${KAKAO_CLIENT_ID}
             client-secret: ${KAKAO_CLIENT_SECRET}
             client-name: Kakao
+
+            # 카카오는 client_secret을 POST 본문에 포함하여 전송하는 방식을 사용
+            # (기본값은 HTTP Basic 인증 헤더)
             client-authentication-method: client_secret_post
+
             authorization-grant-type: authorization_code
             redirect-uri: 'https://ticklingticket.com/login/oauth2/code/kakao'
+
+            # 카카오에게 요청할 사용자 정보 범위
+            # profile_nickname: 닉네임
+            # profile_image: 프로필 이미지 URL
+            # account_email: 이메일 주소
             scope:
               - profile_nickname
               - profile_image
               - account_email
+
             provider: kakao
+
+        # ── provider: 각 소셜 서비스의 API 엔드포인트 정보 ──
+        # Google은 Spring이 기본 내장하고 있어서 별도 설정 불필요
+        # Kakao는 직접 URL을 지정해야 합니다.
         provider:
-          naver:
-            authorization-uri: https://nid.naver.com/oauth2.0/authorize
-            token-uri: https://nid.naver.com/oauth2.0/token
-            user-info-uri: https://openapi.naver.com/v1/nid/me
-            user-name-attribute: response
           kakao:
             authorization-uri: https://kauth.kakao.com/oauth/authorize
             token-uri: https://kauth.kakao.com/oauth/token
             user-info-uri: https://kapi.kakao.com/v2/user/me
+            # 카카오는 사용자 고유 ID를 최상위 "id" 필드로 전달
             user-name-attribute: id
 
-  # 🤖 OPENAI API 설정
+  # ────────────────────────────────────────────────────────
+  # 🤖 OpenAI API 설정 (Spring AI 프레임워크)
+  # ────────────────────────────────────────────────────────
+  # application.yml의 공통 설정을 운영 환경에 맞게 덮어씁니다.
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY} # 환경 변수에서 주입
+      # API 키 — 환경 변수에서 주입
+      api-key: ${OPENAI_API_KEY}
       chat:
         options:
+          # 사용할 GPT 모델
           model: gpt-4o-mini
-        timeout: 30s                   # 운영은 짧게
+        # 운영 환경 타임아웃 — 공통 설정(120초)보다 짧은 30초로 설정
+        # 이유: 운영에서는 응답이 늦으면 사용자 경험이 나빠지므로
+        # 빠르게 실패(fail-fast)하고 에러를 처리하는 것이 더 좋습니다.
+        timeout: 30s
 
-# 🌐 운영환경 도메인 설정 (CloudFront CDN)
+
+# ════════════════════════════════════════════════════════════
+# 📌 [app] 커스텀 애플리케이션 설정
+# ════════════════════════════════════════════════════════════
 app:
-  base-url: ${BASE_URL:https://d123456789.cloudfront.net}  # 환경변수 우선, 기본값은 예시 도메인
+  # 서버(백엔드) 기본 URL — CloudFront CDN을 통해 제공되는 도메인
+  # CDN(Content Delivery Network)이란?
+  #   전 세계 여러 서버에 콘텐츠를 분산 저장하여
+  #   사용자와 가까운 서버에서 빠르게 전달하는 서비스입니다.
+  #
+  # ${BASE_URL:https://d123456789.cloudfront.net} 의미:
+  #   환경 변수 BASE_URL이 있으면 그 값 사용, 없으면 기본값(예시 도메인) 사용
+  base-url: ${BASE_URL:https://d123456789.cloudfront.net}
+
+  # 프론트엔드(클라이언트) 기본 URL
+  # 이메일 링크, OAuth 리다이렉트 등에서 프론트엔드 주소가 필요할 때 사용됩니다.
   front-base-url: ${FRONT_BASE_URL}
-# ☁️ AWS S3 관련 설정
-# 's3' 프로필이 활성화될 때 이 설정이 로드
-# 실제 AWS Access Key, Secret Key는 환경 변수 또는 보안 저장소에서 주입받아야 함
+
+
+# ════════════════════════════════════════════════════════════
+# ☁️ [cloud.aws] AWS S3 파일 저장소 설정
+# ════════════════════════════════════════════════════════════
+# S3(Simple Storage Service)란?
+#   AWS에서 제공하는 클라우드 파일 저장소입니다.
+#   이미지, 문서 등의 파일을 안전하게 저장하고 URL로 접근할 수 있습니다.
+#   로컬 서버 디스크가 아닌 클라우드에 저장하므로 서버가 바뀌어도 파일이 유지됩니다.
 cloud:
   aws:
     credentials:
-      # 액세스 키와 시크릿 키는 환경 변수 (예: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) 또는 보안 저장소에서 주입
-      access-key: ${AWS_ACCESS_KEY_ID}         # 🔒 AWS IAM 사용자 Access Key
-      secret-key: ${AWS_SECRET_ACCESS_KEY}     # 🔒 AWS IAM 사용자 Secret Key
-    region:
-      static: ap-northeast-2                     # 예시: 서울 리전 (실제 운영 환경에 맞게 변경)
-    s3:
-      bucket: ticketmon-prod-assets         # [권장] 운영 환경용 S3 버킷 이름 (개발 환경과 다르게 설정)
-      # prefix(폴더) 기준 관리, supabase → s3 마이그레이션에 최적화
-      profile-prefix: profile-imgs/        # 프로필 이미지 저장 경로 접두사 (예: profile-imgs/{userId}.jpg)
-      poster-prefix: poster-imgs/          # 포스터 이미지 저장 경로 접두사 (예: poster-imgs/{posterId}.jpg)
-      seller-docs-prefix: seller-docs/     # 판매자 서류 저장 경로 접두사 (예: seller-docs/{docId}.pdf)
-      # 실제 Key: {prefix}{파일명}
-      # 운영 배포시 prod-assets, dev는 dev-assets 등 환경 분리
+      # AWS IAM(Identity and Access Management) 사용자의 인증 키
+      # IAM이란? AWS 리소스에 대한 접근 권한을 관리하는 서비스입니다.
+      #
+      # Access Key: 사용자를 식별하는 ID (아이디 역할)
+      # Secret Key: 요청을 서명하는 비밀 키 (비밀번호 역할)
+      # ⚠️ Secret Key가 유출되면 AWS 리소스가 무단으로 사용될 수 있으므로
+      #    반드시 환경 변수로 관리하고, 절대 코드에 직접 적지 마세요!
+      access-key: ${AWS_ACCESS_KEY_ID}
+      secret-key: ${AWS_SECRET_ACCESS_KEY}
 
-# 🔐 JWT (JSON Web Token) 관련 설정
-# 모든 값은 환경 변수로부터 주입
+    region:
+      # AWS 리전(Region) — 데이터가 물리적으로 저장되는 지역
+      # ap-northeast-2 = 아시아 태평양 (서울)
+      # 한국 사용자 대상이므로 서울 리전을 사용하여 네트워크 지연을 최소화합니다.
+      static: ap-northeast-2
+
+    s3:
+      # S3 버킷(Bucket)이란?
+      #   파일을 저장하는 최상위 폴더(컨테이너) 개념입니다.
+      #   버킷 이름은 전 세계에서 고유해야 합니다.
+      #
+      # 운영 환경과 개발 환경의 버킷을 분리하여
+      # 개발 중 실수로 운영 데이터를 삭제하는 것을 방지합니다.
+      # 예: 운영 → ticketmon-prod-assets / 개발 → ticketmon-dev-assets
+      bucket: ticketmon-prod-assets
+
+      # ── 파일 저장 경로 접두사(prefix) ──
+      # S3에는 실제 "폴더" 개념이 없지만, 키(key)에 '/'를 포함하면
+      # 폴더처럼 보이게 관리할 수 있습니다.
+      #
+      # 예시 - 프로필 이미지 저장:
+      #   prefix: "profile-imgs/"
+      #   파일명: "user123.jpg"
+      #   → S3 키: "profile-imgs/user123.jpg"
+      #   → URL: https://버킷명.s3.amazonaws.com/profile-imgs/user123.jpg
+
+      # 사용자 프로필 이미지 저장 경로
+      profile-prefix: profile-imgs/
+
+      # 콘서트 포스터 이미지 저장 경로
+      poster-prefix: poster-imgs/
+
+      # 판매자 인증 서류(사업자등록증 등) 저장 경로
+      seller-docs-prefix: seller-docs/
+
+
+# ════════════════════════════════════════════════════════════
+# 🔐 [jwt] JWT 인증 토큰 설정
+# ════════════════════════════════════════════════════════════
+# JWT(JSON Web Token)란?
+#   사용자 인증 정보를 JSON 형태로 암호화한 토큰입니다.
+#   로그인 성공 시 서버가 JWT를 발급하고, 이후 요청마다 이 토큰을 함께 보내면
+#   서버가 "이 사용자는 로그인된 사용자다"라고 인식합니다.
+#
+# Access Token vs Refresh Token:
+#   - Access Token: API 요청 시 사용. 짧은 유효기간 (보안 강화)
+#   - Refresh Token: Access Token이 만료되면 새 Access Token을 발급받는 데 사용. 긴 유효기간
+#   이렇게 분리하면, Access Token이 탈취되어도 피해를 최소화할 수 있습니다.
 jwt:
-  secret: ${JWT_SECRET_KEY} # openssl rand -base64 32
+  # JWT 서명에 사용할 비밀 키
+  # 이 키로 토큰을 암호화하고, 검증 시에도 이 키로 복호화합니다.
+  # 생성 방법: 터미널에서 `openssl rand -base64 32` 명령어 실행
+  # ⚠️ 이 키가 유출되면 누구나 유효한 토큰을 만들 수 있으므로 반드시 환경 변수로 관리!
+  secret: ${JWT_SECRET_KEY}
+
+  # Access Token 유효 시간 (밀리초 단위)
+  # 600000ms = 10분
+  # 기본값 10분 — 환경 변수로 변경 가능
   access-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:600000}
+
+  # Refresh Token 유효 시간 (밀리초 단위)
+  # 86400000ms = 24시간 (1일)
+  # 기본값 24시간 — 환경 변수로 변경 가능
   refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:86400000}
 
-# ☁️ AWS SQS (Simple Queue Service) 관련 설정
-# 모든 값은 환경 변수로부터 주입
+
+# ════════════════════════════════════════════════════════════
+# 📨 [aws.sqs] AWS SQS 메시지 큐 설정
+# ════════════════════════════════════════════════════════════
+# SQS(Simple Queue Service)란?
+#   AWS에서 제공하는 메시지 큐(대기열) 서비스입니다.
+#
+# 메시지 큐란?
+#   서비스 간에 비동기로 메시지를 주고받는 시스템입니다.
+#   예: 결제 완료 → SQS에 "티켓 발급 요청" 메시지 전송 → 별도 서비스가 메시지를 읽고 티켓 발급
+#
+# 장점:
+#   - 서비스 간 결합도를 낮춤 (하나가 죽어도 다른 서비스에 영향 없음)
+#   - 트래픽 급증 시 메시지를 큐에 쌓아두고 순차 처리 (부하 완화)
 aws:
   sqs:
+    # SQS 서비스 엔드포인트(접속 주소)
     endpoint: ${SQS_ENDPOINT}
+
+    # AWS 인증 키 — 위의 S3와 동일한 IAM 키를 재사용
     access-key: ${AWS_ACCESS_KEY_ID}
     secret-key: ${AWS_SECRET_ACCESS_KEY}
 
-# 📊 로깅 레벨 설정
-# 운영 환경에서는 불필요한 로그 생성을 줄이기 위해 로그 레벨을 높게 설정
+
+# ════════════════════════════════════════════════════════════
+# 📊 [logging] 운영 환경 로깅 설정
+# ════════════════════════════════════════════════════════════
+# 운영 환경에서는 로그가 너무 많으면 디스크가 가득 차고 성능이 저하됩니다.
+# 따라서 기본 레벨을 높게(WARN) 설정하되,
+# 디버깅이 필요한 특정 패키지만 낮은 레벨(DEBUG)로 설정합니다.
 logging:
   level:
-    root: WARN  # 기본 로그 레벨을 WARN으로 설정
-    # HTTP 요청/응답 및 웹 관련 로깅 상세화
+    # 전체 기본 로그 레벨 — WARN 이상만 출력
+    # 즉, INFO, DEBUG, TRACE 레벨 로그는 출력되지 않습니다.
+    root: WARN
+
+    # Spring 웹 관련 로그 — DEBUG로 설정하여 HTTP 요청/응답 상세 정보를 확인
+    # 운영 중 API 문제를 진단할 때 유용합니다.
+    # ⚠️ 트래픽이 매우 많은 경우 INFO 또는 WARN으로 올리는 것을 권장
     org.springframework.web: DEBUG
-    com.team03: DEBUG  # 팀 패키지의 로그 레벨을 INFO로 설정합니다. (필요시 WARN 또는 ERROR로 더 제한 가능)
-    # WARN -> 실시간 모니터링 툴이 있지 않다면, 불필요한 로그까지 나오는 걸 방지할 수 있음
 
-# 📚 Swagger API 문서 설정
+    # 우리 팀 패키지 — DEBUG로 설정하여 비즈니스 로직의 상세 동작 확인
+    # 주석에는 INFO라고 적혀 있지만 실제 값은 DEBUG입니다.
+    # 안정화 후에는 INFO 또는 WARN으로 올려서 로그 양을 줄이는 것을 권장합니다.
+    com.team03: DEBUG
+
+
+# ════════════════════════════════════════════════════════════
+# 📚 [swagger] API 문서 설정
+# ════════════════════════════════════════════════════════════
+# Swagger란?
+#   REST API의 명세(어떤 API가 있고, 어떤 파라미터를 받는지 등)를
+#   자동으로 문서화하고 웹 UI에서 테스트할 수 있게 해주는 도구입니다.
+#
+# 운영 환경에서 Swagger를 활성화하면 API 구조가 외부에 노출되어
+# 보안 취약점이 될 수 있으므로 비활성화합니다.
+# 개발 환경(application-dev.yml)에서는 true로 설정하여 활용합니다.
 swagger:
-  enabled: false  # 운영 환경에서는 보안을 위해 Swagger 문서를 비활성화
+  enabled: false
 
-# 💳 토스페이먼츠 환경변수 주입
+
+# ════════════════════════════════════════════════════════════
+# 💳 [toss] 토스페이먼츠 결제 키 설정
+# ════════════════════════════════════════════════════════════
+# application.yml에서 API URL을 설정했고, 여기서는 인증 키를 설정합니다.
+#
+# client-key: 프론트엔드(브라우저)에서 결제창을 띄울 때 사용하는 키 (공개 가능)
+# secret-key: 서버에서 결제 승인 API를 호출할 때 사용하는 키 (절대 비공개!)
+# ⚠️ secret-key가 유출되면 임의 결제 승인이 가능하므로 반드시 환경 변수로 관리!
 toss:
-  client-key: ${TOSS_CLIENT_KEY} # 환경 변수에서 주입
-  secret-key: ${TOSS_SECRET_KEY} # 환경 변수에서 주입
+  client-key: ${TOSS_CLIENT_KEY}
+  secret-key: ${TOSS_SECRET_KEY}
 
-# 🤖 Together AI API 설정
+
+# ════════════════════════════════════════════════════════════
+# 🤖 [ai.openai] openai AI API 설정
+# ════════════════════════════════════════════════════════════
 ai:
-  together:
-    api-key: ${OPENAI_API_KEY} # 환경 변수에서 주입
+  openai:
+    api-key: ${OPENAI_API_KEY}
     chat:
       options:
         model: gpt-4o-mini
-      timeout: 30s                   # 운영은 짧게
+      timeout: 30s
 
-# 🌍 CORS 설정
+
+# ════════════════════════════════════════════════════════════
+# 🌍 [cors] CORS 설정
+# ════════════════════════════════════════════════════════════
+# CORS(Cross-Origin Resource Sharing)란?
+#   웹 브라우저의 보안 정책 중 하나입니다.
+#   기본적으로 브라우저는 다른 도메인의 API를 호출하는 것을 차단합니다.
+#
+#   예: 프론트엔드(https://ticklingticket.com)에서
+#       백엔드 API(https://api.ticklingticket.com)를 호출하면
+#       도메인이 다르므로 기본적으로 차단됩니다.
+#
+#   이 설정에서 허용할 도메인(Origin)을 명시하면 해당 도메인에서의 요청만 허용됩니다.
+#   ⚠️ 운영 환경에서는 절대 '*'(모든 도메인 허용)을 사용하지 마세요!
 cors:
   allowed-origins:
+    # 프론트엔드 도메인 — 사용자가 직접 접속하는 주소
     - "https://ticklingticket.com"
+    # API 서버 도메인 — 서버 간 통신이 필요한 경우
     - "https://api.ticklingticket.com"
+
+
+# ════════════════════════════════════════════════════════════
+# 🔔 [onesignal] 푸시 알림 서비스 설정
+# ════════════════════════════════════════════════════════════
+# OneSignal이란?
+#   모바일/웹 푸시 알림을 쉽게 보낼 수 있는 서비스입니다.
+#   예: "예매가 시작되었습니다!", "결제가 완료되었습니다" 같은 알림을
+#   사용자의 브라우저나 앱에 실시간으로 전달합니다.
+#
+# app-id: OneSignal 대시보드에서 생성한 앱의 고유 식별자
+# api-key: 서버에서 알림을 발송할 때 사용하는 인증 키
 onesignal:
-  app-id: ${ONESIGNAL_APP_ID}        # 운영 환경에서 환경 변수로 관리
+  app-id: ${ONESIGNAL_APP_ID}
   api-key: ${ONESIGNAL_API_KEY}

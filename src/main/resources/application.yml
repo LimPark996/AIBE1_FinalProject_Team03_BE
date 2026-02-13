@@ -1,99 +1,317 @@
+# ============================================================
+# 🎫 TicketMon-Go 애플리케이션 설정 파일 (application.yml)
+# ============================================================
+# 이 파일은 Spring Boot 애플리케이션의 모든 설정을 한 곳에서 관리합니다.
+# YAML 형식으로 작성되며, 들여쓰기(스페이스 2칸)로 계층 구조를 표현합니다.
+# 예: app.queue.max-active-users 는 아래처럼 작성합니다.
+# ============================================================
+
+# ────────────────────────────────────────────────────────────
+# 📌 [app] 커스텀 설정 영역
+# ────────────────────────────────────────────────────────────
+# Spring이 기본 제공하는 설정이 아닌, 우리 프로젝트에서 직접 정의한 설정입니다.
+# @ConfigurationProperties 또는 @Value 어노테이션으로 Java 코드에서 읽어올 수 있습니다.
+# 예: @Value("${app.queue.max-active-users}") private int maxActiveUsers;
 app:
   queue:
-    max-active-users: 20 # 예매 페이지에 동시 진입 가능한 최대 사용자 수
-    top-ranker-count: 40 #  최상위 대기자 기준 설정
+    # 예매 페이지에 동시에 접속할 수 있는 최대 사용자 수
+    # 이 숫자를 초과하면 나머지 사용자는 "대기열"에서 기다려야 합니다.
+    # 서버 부하를 조절하는 핵심 값 — 서버 성능에 따라 조절합니다.
+    max-active-users: 20
+
+    # 대기열에서 "곧 입장 가능한 상위 대기자"로 분류되는 인원 수
+    # 예: 40이면 대기열 1~40번째 사람에게 "곧 입장합니다" 같은 안내를 보낼 수 있습니다.
+    top-ranker-count: 40
+
+    # 입장 허가 토큰(Access Key)의 유효 시간 (초 단위)
+    # 120초 = 2분. 입장 허가를 받은 사용자는 2분 안에 예매 페이지에 진입해야 합니다.
+    # 시간이 지나면 토큰이 만료되어 다시 대기열에 들어가야 합니다.
     access-key-ttl-seconds: 120
+
+    # 입장 허가 토큰의 최대 유효 시간 (초 단위)
+    # 480초 = 8분. 연장을 반복해도 이 시간을 초과할 수 없습니다.
+    # 한 사용자가 토큰을 무한히 연장해서 자리를 독점하는 것을 방지합니다.
     access-key-max-ttl-seconds: 480
+
+    # 토큰 연장 시 추가되는 시간 (초 단위)
+    # 사용자가 아직 예매 중이면 120초(2분)씩 추가로 시간을 받습니다.
     access-key-extend-seconds: 120
+
   websocket:
-    scheduler-health: # WebSocket 연결 현황을 로깅 주기
+    scheduler-health:
+      # WebSocket 연결 상태를 로그에 기록하는 주기 (밀리초 단위)
+      # 10000ms = 10초마다 "현재 WebSocket 연결 수" 같은 정보를 로그로 출력합니다.
+      # WebSocket: 서버와 클라이언트가 실시간 양방향 통신하는 기술
+      # (대기열 순번 업데이트 등에 사용됩니다)
       delay-ms: 10000
+
+# ────────────────────────────────────────────────────────────
+# 📌 [seat] 좌석 관리 및 예매 모듈 설정
+# ────────────────────────────────────────────────────────────
+# 좌석 선점, 세션 관리, 캐시, 분산 락 등 좌석 예매의 핵심 로직에 관한 설정입니다.
 seat:
   reservation:
-    ttl-minutes: 5 # 좌석 선점 유지 시간 (분)
-    max-seat-count: 4 # 사용자당 최대 선점 가능 좌석 수
-    last-update-ttl-hours: 1 # 마지막 업데이트 시간 캐시 TTL (시간)
+    # 좌석 선점(임시 잠금) 유지 시간 (분 단위)
+    # 사용자가 좌석을 선택하면 5분 동안 다른 사람이 그 좌석을 선택할 수 없습니다.
+    # 5분 안에 결제를 완료하지 않으면 선점이 해제되어 다른 사람이 선택할 수 있게 됩니다.
+    ttl-minutes: 5
+
+    # 한 사용자가 동시에 선점할 수 있는 최대 좌석 수
+    # 4석까지만 한 번에 선택 가능 — 매크로나 대량 구매를 방지합니다.
+    max-seat-count: 4
+
+    # "마지막 업데이트 시간" 캐시의 유효 시간 (시간 단위)
+    # 좌석 데이터가 마지막으로 갱신된 시간을 Redis 등에 캐싱해 두는데,
+    # 1시간이 지나면 캐시가 만료되어 DB에서 다시 조회합니다.
+    last-update-ttl-hours: 1
+
   polling:
-    default-timeout-ms: 30000 # 기본 폴링 타임아웃 (ms)
-    max-timeout-ms: 60000 # 최대 폴링 타임아웃 (ms)
-    min-timeout-ms: 5000 # 최소 폴링 타임아웃 (ms)
+    # ── 롱 폴링(Long Polling) 설정 ──
+    # 롱 폴링이란? 클라이언트가 서버에 요청을 보내고, 서버가 새 데이터가 생길 때까지
+    # 응답을 "보류"하는 기법입니다. 좌석 상태 변경을 실시간에 가깝게 전달할 수 있습니다.
+
+    # 기본 폴링 대기 시간 (밀리초)
+    # 30000ms = 30초. 서버는 최대 30초까지 새로운 좌석 변경을 기다린 후 응답합니다.
+    default-timeout-ms: 30000
+
+    # 최대 폴링 대기 시간 (밀리초)
+    # 60000ms = 60초. 클라이언트가 요청할 수 있는 폴링 대기 시간의 상한선입니다.
+    max-timeout-ms: 60000
+
+    # 최소 폴링 대기 시간 (밀리초)
+    # 5000ms = 5초. 너무 짧은 폴링 요청을 방지하여 서버 부하를 줄입니다.
+    min-timeout-ms: 5000
+
   session:
-    max-sessions-per-concert: 1000 # 콘서트당 최대 세션 수
-    cleanup-minutes: 5 # 세션 정리 간격 (분)
+    # 콘서트 하나당 동시에 유지할 수 있는 최대 세션(접속) 수
+    # 1000명을 초과하면 새로운 접속이 거부될 수 있습니다.
+    # 세션(Session): 서버가 각 사용자의 접속 상태를 추적하기 위해 만드는 임시 데이터
+    max-sessions-per-concert: 1000
+
+    # 만료된 세션을 정리(삭제)하는 주기 (분 단위)
+    # 5분마다 더 이상 유효하지 않은 세션을 자동으로 정리합니다.
+    # 메모리 누수를 방지하고 정확한 접속자 수를 유지하기 위해 필요합니다.
+    cleanup-minutes: 5
+
   lock:
-    wait-time-seconds: 3 # 락 획득 대기 시간 (초)
-    lease-time-seconds: 10 # 락 보유 시간 (초)
+    # ── 분산 락(Distributed Lock) 설정 ──
+    # 분산 락이란? 여러 서버(인스턴스)가 동시에 같은 자원(예: 좌석)을 수정하지 못하도록
+    # Redis 같은 외부 저장소를 이용해 "잠금"을 거는 기법입니다.
+    # 예: 두 사용자가 동시에 같은 좌석을 선택하면, 먼저 락을 획득한 사람만 성공합니다.
+
+    # 락을 획득하기 위해 기다리는 최대 시간 (초)
+    # 3초 안에 락을 못 얻으면 실패 처리됩니다.
+    wait-time-seconds: 3
+
+    # 락을 보유할 수 있는 최대 시간 (초)
+    # 10초가 지나면 자동으로 락이 해제됩니다.
+    # 락을 획득한 서버가 갑자기 죽어도 10초 후에는 다른 서버가 작업을 이어갈 수 있습니다.
+    # (= 데드락 방지)
+    lease-time-seconds: 10
+
   cache:
-    warmup-minutes-before: 10 # 캐시 워밍업 시작 시간 (분 전)
+    # 캐시 워밍업(Cache Warm-up) 시작 시간 (분 단위, 예매 시작 전 기준)
+    # 예매 시작 10분 전에 좌석 데이터를 미리 캐시(Redis 등)에 올려놓습니다.
+    # 캐시 워밍업이란? 사용자가 몰리기 전에 자주 조회되는 데이터를 미리 메모리에 적재해서
+    # DB 부하를 줄이고 응답 속도를 높이는 기법입니다.
+    warmup-minutes-before: 10
 
-  # ✅ 새로 추가: 스케줄러 관련 설정 - [좌석 관리 및 예매 모듈]
+  # ── 스케줄러(Scheduler) 설정 ──
+  # 스케줄러란? 정해진 시간 또는 주기에 자동으로 실행되는 작업(Task)입니다.
+  # Java의 @Scheduled 어노테이션이나 Spring TaskScheduler를 이용합니다.
   scheduler:
+    # 좌석 캐시 워밍업 스케줄러 설정
     seat-cache-warmup:
-      enabled: true          # 좌석 캐시 Warm-up 스케줄러 활성화
-      interval-minutes: 5    # 실행 주기 (분)
-      warmup-minutes-before: 10  # 예매 시작 몇 분 전에 캐시 초기화할지
-      lock-wait-seconds: 30  # 분산 락 획득 대기 시간
-      lock-lease-seconds: 300  # 분산 락 유지 시간
-    waiting-queue:
-      enabled: true          # 대기열 스케줄러 활성화 (기존)
-      interval-seconds: 10   # 실행 주기 (초)
+      # true: 이 스케줄러를 활성화합니다. false로 바꾸면 자동 워밍업이 동작하지 않습니다.
+      enabled: true
 
+      # 스케줄러 실행 주기 (분 단위)
+      # 5분마다 "곧 예매가 시작되는 콘서트가 있는지" 확인하고, 있으면 캐시를 미리 채웁니다.
+      interval-minutes: 5
+
+      # 예매 시작 몇 분 전부터 캐시를 초기화(워밍업)할지
+      # 10분 전 = 오후 8시 예매 시작이면 7시 50분부터 캐시를 준비합니다.
+      warmup-minutes-before: 10
+
+      # 분산 락 획득 대기 시간 (초)
+      # 여러 서버가 동시에 워밍업을 실행하지 않도록 락을 사용합니다.
+      # 30초 동안 락 획득을 시도합니다.
+      lock-wait-seconds: 30
+
+      # 분산 락 유지 시간 (초)
+      # 300초 = 5분. 워밍업 작업이 5분을 초과하면 락이 자동 해제됩니다.
+      lock-lease-seconds: 300
+
+    # 대기열 처리 스케줄러 설정
+    waiting-queue:
+      # true: 대기열 스케줄러를 활성화합니다.
+      # 대기열에서 다음 사용자를 예매 페이지로 입장시키는 작업을 자동으로 수행합니다.
+      enabled: true
+
+      # 실행 주기 (초 단위)
+      # 10초마다 대기열을 확인하고, 빠진 사용자 수만큼 새로운 사용자를 입장시킵니다.
+      interval-seconds: 10
+
+
+# ════════════════════════════════════════════════════════════
+# 📌 [spring] Spring Boot 프레임워크 설정
+# ════════════════════════════════════════════════════════════
+# Spring Boot가 자동으로 읽어가는 공식 설정 항목들입니다.
+# 공식 문서: https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html
 spring:
   application:
+    # 애플리케이션 이름 — 로그, 모니터링 도구, 서비스 디스커버리 등에서 식별자로 사용됩니다.
     name: ticketmon-go
+
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:prod}  # 환경 변수 'SPRING_PROFILES_ACTIVE' 값(.env) 사용, 없으면 'dev'를 기본값으로 설정
-    # 로컬 개발 시 'dev' 프로필이 기본으로 활성화됩니다. 배포 시에도 변경 X -> .env에서 SPRING_PROFILES_ACTIVE를 prod로 변경
-    # include: supabase # 'supabase' 관련 빈(StorageUploader, StorageClient)을 활성화된 프로필과 함께 로드
+    # ── 프로필(Profile) 설정 ──
+    # 프로필이란? 환경(개발/운영)에 따라 다른 설정을 적용하는 Spring의 기능입니다.
+    # 예: dev 프로필 → 로컬 DB 사용, prod 프로필 → 운영 DB 사용
+
+    # ${SPRING_PROFILES_ACTIVE:prod} 의 의미:
+    #   1. 환경 변수 SPRING_PROFILES_ACTIVE 값이 있으면 그 값을 사용
+    #   2. 없으면 기본값 'prod'를 사용
+    # .env 파일에서 SPRING_PROFILES_ACTIVE=dev 또는 prod로 설정할 수 있습니다.
+    active: ${SPRING_PROFILES_ACTIVE:prod}
+
   config:
-    import: optional:application-${spring.profiles.active}.yml # 활성화된 프로필에 맞는 추가 설정 파일 로드
+    # 활성화된 프로필에 맞는 추가 설정 파일을 불러옵니다.
+    # 예: 프로필이 'dev'이면 → application-dev.yml 파일을 추가로 로드
+    #     프로필이 'prod'이면 → application-prod.yml 파일을 추가로 로드
+    # 'optional:' 접두사: 해당 파일이 없어도 에러가 발생하지 않습니다.
+    import: optional:application-${spring.profiles.active}.yml
 
   autoconfigure:
-    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration  # 임시로 DB 자동 설정 제외 (설정이 없을 경우 에러 방지)
-    # 실제 DB 사용 시엔 위 라인 제거. 현재는 데이터소스 수동 설정을 의미
+    # ── 자동 설정(Auto Configuration) 제외 ──
+    # Spring Boot는 클래스패스에 있는 라이브러리를 감지하여 자동으로 설정을 만들어줍니다.
+    # 여기서는 DataSource(DB 연결) 자동 설정을 제외합니다.
+    #
+    # 왜 제외하나요?
+    # → DB 설정(URL, 비밀번호 등)이 아직 없는 상태에서 앱을 실행하면
+    #   "DataSource를 만들 수 없다"는 에러가 발생하기 때문입니다.
+    # → 실제 DB를 연결할 때는 이 줄을 삭제하거나 주석 처리해야 합니다.
+    #
+    # ⚠️ 주의: 이 상태에서는 JPA, MyBatis 등 DB 관련 기능이 동작하지 않습니다.
+    exclude: org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
 
   jackson:
-    time-zone: Asia/Seoul  # [기본 설정] 한국 사용자 대상이므로 KST 기준으로 기본 직렬화 설정함
-    # 추후 글로벌 확장 시 UTC 또는 타임존 동적 처리로 대체 가능
+    # ── JSON 직렬화 설정 (Jackson 라이브러리) ──
+    # Jackson이란? Java 객체를 JSON으로 변환(직렬화)하거나,
+    # JSON을 Java 객체로 변환(역직렬화)하는 라이브러리입니다.
+    # Spring Boot에서 REST API의 요청/응답을 자동으로 JSON 변환할 때 사용됩니다.
+    #
+    # 시간대를 Asia/Seoul(KST, UTC+9)로 설정하면
+    # 날짜/시간 데이터가 한국 시간 기준으로 JSON에 표시됩니다.
+    # 예: 콘서트 시작 시간이 "2025-03-01T19:00:00+09:00" 형태로 출력
+    time-zone: Asia/Seoul
+
   main:
+    # 같은 이름의 빈(Bean)이 여러 개 등록될 때 나중에 등록된 것이 이전 것을 덮어쓰도록 허용
+    # Bean이란? Spring이 관리하는 Java 객체를 의미합니다.
+    # 기본값은 false(중복 시 에러 발생)이지만, 여러 설정 파일을 조합할 때
+    # 의도적으로 빈을 재정의해야 하는 경우 true로 설정합니다.
+    # ⚠️ 주의: 예상치 못한 빈 덮어쓰기가 발생할 수 있으므로 디버깅이 어려워질 수 있습니다.
     allow-bean-definition-overriding: true
 
   servlet:
     multipart:
-      max-file-size: 11MB  # 단일 파일 최대 크기
-      max-request-size: 11MB # 요청 전체의 최대 크기 (일반적으로 동일하게 설정)
+      # ── 파일 업로드 설정 ──
+      # Multipart란? HTTP 요청에서 파일을 전송할 때 사용하는 형식입니다.
+      # 예: 콘서트 포스터 이미지를 업로드할 때 이 설정이 적용됩니다.
 
-    # 스케줄러 설정 - [좌석 관리 및 예매 모듈]
+      # 단일 파일의 최대 크기 — 11MB를 초과하는 파일은 업로드가 거부됩니다.
+      max-file-size: 11MB
+
+      # 한 번의 HTTP 요청 전체 크기 — 여러 파일을 동시에 보낼 때의 총합 제한
+      # 보통 max-file-size와 동일하게 설정합니다.
+      max-request-size: 11MB
+
   task:
+    # ── 스케줄링 & 비동기 작업 스레드 풀 설정 ──
+    # 스레드(Thread)란? 프로그램 내에서 동시에 실행되는 작업 단위입니다.
+    # 스레드 풀(Thread Pool)이란? 미리 스레드를 여러 개 만들어 놓고
+    # 작업이 들어올 때마다 꺼내 쓰는 방식 — 매번 스레드를 새로 만드는 비용을 절약합니다.
+
     scheduling:
-      enabled: true  # 스케줄러 활성화 (기본값: true)
+      # @Scheduled 어노테이션으로 등록된 반복 작업들을 실행하는 스레드 풀
+      enabled: true   # 스케줄러 기능 활성화
+
       pool:
-        size: 10     # 스케줄러 스레드 풀 크기
-      thread-name-prefix: "ticket-scheduler-"  # 스레드 이름 접두사
+        size: 10      # 동시에 실행 가능한 스케줄 작업 수 (스레드 10개)
+
+      # 스레드 이름 접두사 — 로그에서 어떤 스레드가 작업을 실행하는지 구분할 때 유용
+      # 예: 로그에 "ticket-scheduler-1" 같은 이름이 표시됩니다.
+      thread-name-prefix: "ticket-scheduler-"
+
     execution:
+      # @Async 어노테이션으로 등록된 비동기 작업들을 실행하는 스레드 풀
+      # 비동기(Async)란? 작업을 요청한 후 완료를 기다리지 않고 다음 작업을 진행하는 방식
+      # 예: 알림 발송, 로그 저장 등 즉시 응답이 필요 없는 작업에 사용
       pool:
-        core-size: 8      # 비동기 작업 스레드 풀 코어 크기
-        max-size: 20      # 비동기 작업 스레드 풀 최대 크기
-        queue-capacity: 500  # 대기 큐 크기
+        core-size: 8       # 기본 스레드 수 — 항상 이만큼의 스레드가 준비되어 있습니다
+        max-size: 20        # 최대 스레드 수 — 대기 큐가 가득 차면 최대 20개까지 늘어남
+        queue-capacity: 500 # 대기 큐 크기 — 모든 스레드가 바쁠 때 최대 500개 작업이 대기 가능
+        # 작업 처리 흐름: core-size 스레드 모두 사용 중 → 큐에 대기 → 큐도 가득 차면 → max-size까지 스레드 추가
 
   ai:
+    # ── OpenAI (ChatGPT) API 연동 설정 ──
+    # Spring AI 프레임워크를 사용하여 OpenAI API를 호출합니다.
+    # 콘서트 리뷰 자동 요약 등의 AI 기능에 사용됩니다.
     openai:
+      # OpenAI API 키 — .env 파일이나 환경 변수에서 읽어옵니다.
+      # ⚠️ 절대 이 파일에 실제 API 키를 직접 적지 마세요! (보안 위험)
+      # ${OPENAI_API_KEY}는 "환경 변수 OPENAI_API_KEY의 값을 가져와라"는 의미입니다.
       api-key: ${OPENAI_API_KEY}
+
       chat:
         options:
-          model: gpt-4o-mini          # 저렴하고 빠름
-          temperature: 0.7
-          max-tokens: 700
-        timeout: 120s                  # 기본 타임아웃
+          # 사용할 GPT 모델 — gpt-4o-mini는 비용이 저렴하고 응답이 빠른 모델
+          model: gpt-4o-mini
 
+          # temperature (0.0 ~ 2.0): AI 응답의 창의성/랜덤성 조절
+          # 0.0 = 항상 같은 답변 (가장 확률 높은 단어만 선택)
+          # 1.0 = 적당히 다양한 답변
+          # 2.0 = 매우 창의적이지만 엉뚱할 수 있음
+          # 0.7 = 요약에 적합한 균형 잡힌 값
+          temperature: 0.7
+
+          # AI가 한 번에 생성할 수 있는 최대 토큰(단어 조각) 수
+          # 700토큰 ≈ 한국어 기준 약 300~400자 정도
+          max-tokens: 700
+
+        # API 호출 시 응답을 기다리는 최대 시간
+        # 120초(2분) 안에 응답이 오지 않으면 타임아웃 에러 발생
+        timeout: 120s
+
+    # ── AI 리뷰 요약 조건 설정 ──
+    # "언제 AI 요약을 다시 생성할 것인가"를 결정하는 조건들입니다.
     summary:
       condition:
+        # 최소 리뷰 수 — 리뷰가 10개 이상일 때만 AI 요약을 생성합니다.
+        # 리뷰가 너무 적으면 요약이 의미가 없기 때문입니다.
         min-review-count: 10
+
+        # 리뷰가 이전 요약 시점 대비 3개 이상 추가되면 요약을 다시 생성합니다.
+        # (절대적 변화량 기준)
         significant-count-change: 3
+
+        # 리뷰 수가 20% 이상 증가하면 요약을 다시 생성합니다.
+        # (비율 기준 — 리뷰가 많은 콘서트는 이 조건이 더 적합합니다)
+        # 예: 리뷰 100개 → 120개 = 20% 증가 → 요약 재생성
         significant-count-change-ratio: 0.2
+
+        # true: 리뷰 내용(텍스트)이 하나라도 수정되면 요약을 재생성
+        # false: 리뷰 수 변화만 감지 (내용 변경은 무시)
         update-on-any-content-change: true
+
+        # 요약 재생성 최대 간격 (시간 단위)
+        # 168시간 = 7일. 다른 조건을 만족하지 않더라도 최소 7일에 한 번은 요약을 갱신합니다.
         max-update-interval-hours: 168
 
+      # AI에게 전달하는 시스템 프롬프트 (역할 지시문)
+      # | (파이프 기호): YAML에서 여러 줄의 텍스트를 그대로 유지하는 문법입니다.
+      # AI에게 "당신은 콘서트 리뷰 요약가입니다"라고 역할을 부여하고,
+      # 마크다운 형식으로 한국어 요약을 생성하도록 지시합니다.
       system-prompt: |
         You are a concert review summarizer. Write in Korean using markdown format.
         Structure:
@@ -102,26 +320,70 @@ spring:
         ## 아쉬운 점: (3-4 sentences)
         Keep it concise and practical.
 
-server:
-  port: ${SERVER_PORT:8080}  # .env에서 설정한 포트 사용, 기본은 8080
-    #  ssl:
-    #    enabled: true # HTTPS 활성화
-    #    # .pem 파일 직접 사용 시 필요한 설정들
-    #    certificate: classpath:certs/localhost.pem
-    #    certificate-private-key: classpath:certs/localhost-key.pem
-    # key-store-type을 명시적으로 지정해주는 것이 좋습니다.
-    # PEM 파일을 사용할 경우, key-store-type을 비워두거나 특정 타입을 지정하지 않습니다.
-  # 하지만 Spring Boot 버전에 따라서는 아래 설정이 필요할 수 있습니다.
-  # key-store-type: PKCS12 # 또는 JKS. PEM을 직접 사용할 때는 보통 이 줄이 필요 없습니다.
 
+# ════════════════════════════════════════════════════════════
+# 📌 [server] 내장 웹 서버(Tomcat) 설정
+# ════════════════════════════════════════════════════════════
+# Spring Boot는 Tomcat 웹 서버를 내장하고 있어서 별도 설치 없이 실행할 수 있습니다.
+server:
+  # 웹 서버가 요청을 받을 포트 번호
+  # ${SERVER_PORT:8080}: 환경 변수 SERVER_PORT가 있으면 그 값, 없으면 8080 사용
+  # 브라우저에서 http://localhost:8080 으로 접속할 수 있습니다.
+  port: ${SERVER_PORT:8080}
+
+  # ── HTTPS(SSL) 설정 (현재 비활성화) ──
+  # 주석 처리된 부분은 HTTPS를 적용할 때 사용합니다.
+  # HTTPS란? 데이터를 암호화하여 안전하게 전송하는 프로토콜입니다.
+  # 운영 환경에서는 보통 Nginx 같은 리버스 프록시에서 HTTPS를 처리하므로
+  # Spring Boot 자체에서는 HTTP만 사용하는 경우가 많습니다.
+  #  ssl:
+  #    enabled: true
+  #    certificate: classpath:certs/localhost.pem
+  #    certificate-private-key: classpath:certs/localhost-key.pem
+
+
+# ════════════════════════════════════════════════════════════
+# 📌 [logging] 로깅(로그 출력) 설정
+# ════════════════════════════════════════════════════════════
+# 로그(Log)란? 애플리케이션 실행 중 발생하는 이벤트를 기록하는 것입니다.
+# 로그 레벨 (심각도 순서): TRACE < DEBUG < INFO < WARN < ERROR
+#   - TRACE: 가장 상세한 로그 (거의 사용 안 함)
+#   - DEBUG: 개발 시 디버깅용 상세 로그
+#   - INFO:  일반적인 실행 정보 (기본 레벨)
+#   - WARN:  경고 — 문제가 될 수 있는 상황
+#   - ERROR: 에러 — 실제 문제 발생
+# 설정한 레벨 이상의 로그만 출력됩니다. (예: INFO 설정 시 DEBUG, TRACE는 출력 안 됨)
 logging:
   level:
-    root: ${LOG_LEVEL:INFO}  # 로그 레벨 설정 (INFO / WARN / ERROR)
+    # 전체 애플리케이션의 기본 로그 레벨
+    # 환경 변수 LOG_LEVEL이 있으면 그 값, 없으면 INFO를 사용
+    root: ${LOG_LEVEL:INFO}
+
+    # 특정 클래스별로 로그 레벨을 다르게 설정할 수 있습니다.
+    # 패키지명.클래스명: 로그레벨 형식으로 지정합니다.
+
+    # 좌석 동기화 서비스 — DEBUG로 설정하여 상세한 동작 과정을 확인
     com.team03.ticketmon.seat.service.SeatSyncService: DEBUG
+
+    # 좌석 동기화 스케줄러 — INFO 레벨 (일반 실행 정보만 출력)
     com.team03.ticketmon.seat.scheduler.SeatSyncScheduler: INFO
+
+    # 좌석 동기화 컨트롤러 — INFO 레벨
     com.team03.ticketmon.seat.controller.SeatSyncController: INFO
 
+
+# ════════════════════════════════════════════════════════════
+# 📌 [toss] 토스페이먼츠 결제 API 설정
+# ════════════════════════════════════════════════════════════
+# 토스페이먼츠(Toss Payments)는 한국의 온라인 결제 서비스입니다.
+# 사용자가 티켓을 결제할 때 이 API를 호출하여 실제 결제를 처리합니다.
 toss:
   api:
-    url: https://api.tosspayments.com/v1/payments/ # 토스페이먼츠 API의 기본 경로
-    confirm-url: ${toss.api.url}confirm # 결제 승인 API 엔드포인트 (${toss.api.url} 재사용)
+    # 토스페이먼츠 REST API의 기본 URL (결제 관련 엔드포인트의 루트 경로)
+    url: https://api.tosspayments.com/v1/payments/
+
+    # 결제 승인 API의 전체 URL
+    # ${toss.api.url} → 위에서 정의한 url 값을 재사용합니다.
+    # 결과: https://api.tosspayments.com/v1/payments/confirm
+    # 이렇게 변수를 재사용하면 기본 URL이 바뀌어도 한 곳만 수정하면 됩니다.
+    confirm-url: ${toss.api.url}confirm
