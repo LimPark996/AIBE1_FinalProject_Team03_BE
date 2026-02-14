@@ -15,8 +15,8 @@ import java.util.Map;
 
 /**
  * Redis 연결 상태 확인용 컨트롤러
- * - Redisson 연결 테스트
- * - 기본 Redis 동작 검증
+ * - Redis가 제대로 연결되어 있는지 테스트하는 API들을 모아놓은 클래스
+ * - Redisson이라는 Redis 클라이언트 라이브러리를 사용해서 연결을 테스트함
  */
 @Slf4j
 @RestController
@@ -27,28 +27,26 @@ public class RedisHealthController {
     private final RedissonClient redissonClient;
 
     /**
-     * Redis 연결 상태 확인
-     * GET /health/redis
+     * Redis 연결 상태 확인 API
+     * 브라우저에서 GET /health/redis 로 접속하면 실행됨
+     * Redis에 값을 저장했다가 다시 읽어와서, 제대로 동작하는지 확인하는 방식
      *
-     * @return Redis 연결 성공/실패 메시지
+     * @return Redis 연결 성공/실패 메시지가 담긴 Map(JSON 형태)
      */
+
     @GetMapping("/redis")
     public ResponseEntity<Map<String, Object>> checkRedisConnection() {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            // Redis ping 테스트
             String testKey = "health:test:" + System.currentTimeMillis();
             String testValue = "Redis 연결 테스트 - " + LocalDateTime.now();
 
-            // Redis에 데이터 저장
             RBucket<String> bucket = redissonClient.getBucket(testKey);
             bucket.set(testValue);
 
-            // Redis에서 데이터 조회
             String retrievedValue = bucket.get();
 
-            // 저장된 값과 조회된 값 비교
             if (testValue.equals(retrievedValue)) {
                 response.put("status", "SUCCESS");
                 response.put("message", "Redis 연결 성공");
@@ -56,7 +54,6 @@ public class RedisHealthController {
                 response.put("testKey", testKey);
                 response.put("testValue", retrievedValue);
 
-                // 테스트 키 삭제
                 bucket.delete();
 
                 log.info("Redis 연결 테스트 성공: {}", testKey);
@@ -76,18 +73,18 @@ public class RedisHealthController {
     }
 
     /**
-     * Redis 서버 정보 조회
-     * GET /health/redis/info
+     * Redis 서버 정보 조회 API
+     * 브라우저에서 GET /health/redis/info 로 접속하면 실행됨
+     * Redis 서버(Redisson 클라이언트)가 종료되었는지 아닌지를 확인함
      *
-     * @return Redis 서버 기본 정보
+     * @return Redis 서버 기본 정보 (종료 여부 등)
      */
+
     @GetMapping("/redis/info")
     public ResponseEntity<Map<String, Object>> getRedisInfo() {
         Map<String, Object> response = new HashMap<>();
 
         try {
-            // RedissonClient가 활성 상태인지 확인
-            // 아래 둘은 false가 정상 (Max! 안터져요~)
             boolean isShutdown = redissonClient.isShutdown();
             boolean isShuttingDown = redissonClient.isShuttingDown();
 

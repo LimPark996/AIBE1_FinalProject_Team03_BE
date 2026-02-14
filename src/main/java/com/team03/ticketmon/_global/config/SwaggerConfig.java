@@ -71,18 +71,9 @@ public class SwaggerConfig {
     }
 
     @Bean
-    public GroupedOpenApi initTestApi() {
-            return GroupedOpenApi.builder()
-                    .group("4. 초기 테스트 API 모음")
-                    .pathsToMatch("/test/**")
-                    .pathsToExclude("/test/redis/**")
-                    .build();
-    }
-
-    @Bean
     public GroupedOpenApi allApi() {
         return GroupedOpenApi.builder()
-                .group("5. 전체 API(초기 테스트, 헬스체크 포함)")
+                .group("4. 전체 API")
                 .pathsToMatch("/**")
                 .pathsToExclude("/example/**")
                 .build();
