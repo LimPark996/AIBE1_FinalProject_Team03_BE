@@ -24,10 +24,6 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 @Profile("s3")
 @Configuration
 
-// ──────────────────────────────────────────────────────────────
-// public class S3Config
-// → 이 클래스 안에 S3 연결에 필요한 설정 코드들이 들어감
-// ──────────────────────────────────────────────────────────────
 public class S3Config {
 
     @Value("${cloud.aws.credentials.access-key}")
