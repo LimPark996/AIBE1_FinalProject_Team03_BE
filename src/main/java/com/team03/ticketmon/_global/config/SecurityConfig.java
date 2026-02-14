@@ -40,11 +40,22 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * <b>Spring Security 설정 클래스</b>
- * <p>
- * 애플리케이션의 전반적인 보안(인증, 인가, CORS 등)을 담당합니다.
- * JWT 기반 인증 시스템을 사용하며, OAuth2 소셜 로그인도 지원합니다.
- * </p>
+ * Spring Security 설정 클래스
+ *
+ * [ 쉬운 설명 ]
+ * 이 클래스는 "누가 어디에 접근할 수 있는지"를 정하는 보안 관리자 역할
+ *
+ * 비유: 건물의 출입 관리 시스템
+ * → 1층 로비(로그인/회원가입): 누구나 출입 가능
+ * → 사무실(일반 API): 사원증(JWT 토큰)이 있어야 출입 가능
+ * → 관리자실(admin): 관리자 사원증만 출입 가능
+ * → 판매자실(seller): 판매자 사원증만 출입 가능
+ *
+ * 주요 기능:
+ * 1) JWT 기반 인증: 로그인하면 토큰(팔찌)을 발급, 이후 요청마다 토큰으로 확인
+ * 2) OAuth2 소셜 로그인: 카카오, 구글 등으로 간편 로그인
+ * 3) CORS 설정: 프론트엔드에서 백엔드 API 호출 허용
+ * 4) URL별 접근 권한 설정: 공개/인증필요/관리자전용 등 구분
  */
 @Configuration
 @EnableWebSecurity  // Spring Security 활성화
@@ -67,116 +78,61 @@ public class SecurityConfig {
     private final QueueRedisAdapter queueRedisAdapter;
     private final AppProperties appProperties;
 
-    /**
-     * <b>AuthenticationManager 빈 설정</b> <br>
-     * Spring Security의 인증 처리를 담당하는 핵심 인터페이스입니다.
-     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
 
         return configuration.getAuthenticationManager();
     }
 
-    /**
-     * <b>PasswordEncoder 빈 설정</b> <br>
-     * 비밀번호 암호화 및 검증에 사용됩니다.
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return PasswordEncoderFactories.createDelegatingPasswordEncoder();
     }
 
-    /**
-     * <b>SecurityFilterChain 빈 설정</b> <br>
-     * HTTP 요청에 대한 보안 규칙을 정의합니다.
-     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CORS 설정: corsConfigurationSource 빈을 통해 허용 도메인 및 메서드를 정의
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                // CSRF 보호 비활성화: JWT 기반 인증 시스템에서는 일반적으로 세션을 사용하지 않으므로 비활성화
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // 세션 관리: JWT는 무상태(stateless)이므로 세션을 사용하지 않도록 설정
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
-
-                // 기본 로그인 폼 비활성화: 자체 로그인 API를 사용하므로 Spring Security의 기본 폼 로그인 비활성화
                 .formLogin(AbstractHttpConfigurer::disable)
-
-                // HTTP Basic 인증 비활성화: 브라우저 팝업을 통한 기본 인증 방식 비활성화
                 .httpBasic(AbstractHttpConfigurer::disable)
-
-                // URL 별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
-
-                                //------------인증 없이 접근 허용할 경로들 (permitAll())------------
-                                // 로그인/회원가입/토큰 갱신 등 인증 관련 API 및 페이지
                                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll() // 인증(로그인, 회원가입) 관련 API 경로 허용 (인증 불필요)
                                 .requestMatchers("/auth/**", "/api/auth/me", "/api/auth/register/social").permitAll() // login.html, register.html 등
                                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll() // Swagger UI 및 API 문서
-
-                                // 콘서트 정보 조회 (목록, 검색, 필터링, 상세, AI 요약, 리뷰/기대평 목록) - 공개 API
                                 .requestMatchers(HttpMethod.GET, "/api/concerts", "/api/concerts/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/api/concerts/{id}/**").permitAll() // 상세 조회, AI 요약
                                 .requestMatchers(HttpMethod.GET, "/api/concerts/{id}/reviews").permitAll() // 리뷰 목록 조회
                                 .requestMatchers(HttpMethod.GET, "/api/concerts/{id}/expectations").permitAll() // 기대평 목록 조회
-
-                                // 콘서트 좌석 캐시 삭제
                                 .requestMatchers("/api/seats/*/cache").permitAll()
                                 .requestMatchers("/api/seats/cache").permitAll()
-
-                                // 결제 콜백 및 웹훅 API (외부 시스템에서 호출하므로 permitAll)
                                 .requestMatchers("/api/v1/payments/success", "/api/v1/payments/fail").permitAll()
                                 .requestMatchers(HttpMethod.POST, "/api/v1/webhooks/toss/payment-updates").permitAll()
-
-                                // 좌석 폴링 API (Long Polling, DeferredResult 처리를 위해 permitAll)
                                 .requestMatchers(HttpMethod.GET, "/api/seats/concerts/*/polling").permitAll()
-
-                                // 기본 루트 URL
                                 .requestMatchers("/").permitAll()
                                 .requestMatchers("/healthz").permitAll()
-                                // .requestMatchers("/index.html").permitAll() // 필요시 주석 해제
 
-                                // 기타
-                                // .requestMatchers("/test/upload/**").permitAll()     // 파일 업로드 테스트용 API 경로 허용 (개발/테스트 목적)
-                                // .requestMatchers("/profile/image/**").permitAll()   // 프로필 이미지 접근/업로드 관련 API 경로 허용 (필요하다면 유지)
-
-                                //------------특정 역할이 필요한 경로들 (hasRole())------------
-                                // 관리자 전용 경로 - ADMIN 역할만 접근 허용 (관리자 페이지 및 API)
                                 .requestMatchers("/admin/**").hasRole("ADMIN")
                                 .requestMatchers("/api/admin/seats/**").hasRole("ADMIN")
 
-                                // 실제 판매자 기능 (콘서트 CRUD) - SELLER 역할만 접근 허용
                                 .requestMatchers("/api/seller/concerts/**").hasRole("SELLER")
 
-                                //결제 및 예매 API 경로 허용(로그인된 사용자일 시 )
                                 .requestMatchers("/api/v1/payments/history").authenticated() // 결제 내역 조회
                                 .requestMatchers(HttpMethod.POST, "/api/bookings").authenticated() // 예매 생성 및 결제 준비
                                 .requestMatchers(HttpMethod.POST, "/api/bookings/*/cancel").authenticated() // 예매 취소
-
-                                // 판매자 권한 신청 관련 API 경로 허용 (로그인된 사용자라면 누구나 접근 가능해야 함) - .anyRequest().authenticated()에 포함됨(주석처리)
-                                // .requestMatchers("/api/users/me/seller-status").authenticated() // 판매자 권한 UI 접근 시 로그인 사용자의 권한 상태 조회 (API-03-05)
-                                // .requestMatchers("/api/users/me/seller-requests").authenticated() // 판매자 권한 요청 등록 (API-03-06)
-                                // .requestMatchers("/api/users/me/role").authenticated() // 판매자 본인의 권한 철회 (API-03-07)
+                                .requestMatchers("/api/users/me/seller-status").authenticated() // 판매자 권한 UI 접근 시 로그인 사용자의 권한 상태 조회 (API-03-05)
+                                .requestMatchers("/api/users/me/seller-requests").authenticated() // 판매자 권한 요청 등록 (API-03-06)
+                                .requestMatchers("/api/users/me/role").authenticated() // 판매자 본인의 권한 철회 (API-03-07)
 
                                 // ERROR 디스패치(서블릿이 sendError() 후 내부적으로 /error로 forward할 때)인 경우
                                 // Spring Security 필터 체인을 건너뛰고, 원본 에러 상태(403 등)를 그대로 처리하도록 허용
                                 .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.ASYNC).permitAll()
 
-                                //------------나머지 모든 요청에 대한 접근 권한 설정 (authenticated())------------
-                                // 위에서 정의되지 않은 나머지 모든 요청은 인증(로그인)만 되면 접근 허용
                                 .anyRequest().authenticated()
 
-                        // <추후 추가될 수 있는 인가 설정>
-                        // .requestMatchers("/api/some-specific-path").hasAuthority("SOME_PERMISSION") // 특정 권한 필요
-                        // .requestMatchers("/api/public/**").permitAll() // 추가적인 공개 API 경로
-
-                        // 전체 인증 없이 API 테스트 가능(초기 개발 단계 / 추후 JWT 완성 시 주석 처리)
-                        // .anyRequest().permitAll()  // CORS 문제 임시 조치 -> 추후에 문제 해결 시 .anyRequest().authenticated() 활성화 예정
                 )
 
                 // OAuth2 Login
@@ -212,8 +168,8 @@ public class SecurityConfig {
     }
 
     /**
-     * <b>CORS 설정 빈</b> <br>
-     * 허용할 도메인, HTTP 메서드, 헤더, 자격 증명 등을 정의합니다.
+     * CORS 설정 빈
+     * → 어떤 프론트엔드 주소가 백엔드 API를 호출할 수 있는지 정의
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -247,11 +203,10 @@ public class SecurityConfig {
         return source;
     }
 
-    // OAuth2 로그인
-
     /**
-     * <b>Custom OAuth2UserService 빈 설정</b> <br>
-     * OAuth2 로그인 시 사용자 정보를 로드하고 처리합니다.
+     * Custom OAuth2UserService 빈
+     * → 소셜 로그인(구글, 카카오 등)으로 받은 사용자 정보를 처리하는 서비스
+     * → 소셜 로그인 → 사용자 정보 받기 → 우리 DB에 사용자 등록/조회
      */
     @Bean
     public OAuth2UserService<OAuth2UserRequest, OAuth2User> customOAuth2UserService() {
@@ -259,8 +214,8 @@ public class SecurityConfig {
     }
 
     /**
-     * <b>OAuth2LoginSuccessHandler 빈 설정</b> <br>
-     * OAuth2 로그인 성공 후 JWT 토큰 발행 및 쿠키 설정 등을 처리합니다.
+     * OAuth2 로그인 성공 핸들러
+     * → 소셜 로그인 성공 후: JWT 토큰 발행 → 쿠키에 저장 → 프론트엔드로 리다이렉트
      */
     @Bean
     public OAuth2LoginSuccessHandler oAuth2SuccessHandler() {
@@ -268,8 +223,8 @@ public class SecurityConfig {
     }
 
     /**
-     * <b>OAuth2LoginFailureHandler 빈 설정</b> <br>
-     * OAuth2 로그인 실패 시 처리를 담당합니다.
+     * OAuth2 로그인 실패 핸들러
+     * → 소셜 로그인 실패 시: 에러 정보와 함께 프론트엔드의 로그인 페이지로 리다이렉트
      */
     @Bean
     public OAuth2LoginFailureHandler oAuth2LoginFailureHandler() {

@@ -9,14 +9,23 @@ import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Swagger(API 문서) 설정 클래스
+ *
+ * [ 쉬운 설명 ]
+ * Swagger란?
+ * → 백엔드 API를 웹 브라우저에서 직접 테스트할 수 있는 "대화형 API 문서"
+ * → 프론트엔드 개발자가 "이 API는 어떤 데이터를 보내야 하고, 어떤 응답이 오는지"
+ *   쉽게 확인하고 테스트할 수 있음
+ *
+ * 이 클래스의 역할:
+ * 1) API 문서의 제목, 설명, 버전 등 기본 정보 설정
+ * 2) JWT 인증을 Swagger에서 테스트할 수 있도록 "Authorize" 버튼 설정
+ * 3) API를 그룹별로 분류해서 보기 좋게 정리
+ */
 @Configuration
 public class SwaggerConfig {
 
-    /**
-     * Swagger 전역 보안 설정<br>
-     * - Bearer 방식의 JWT 인증을 테스트할 수 있도록 설정<br>
-     * - Swagger Authorize 버튼 클릭 후 "Bearer <토큰>" 입력 가능
-     */
     @Bean
     public OpenAPI openAPI() {
         final String securitySchemeName = "Authorization";
@@ -24,14 +33,9 @@ public class SwaggerConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Ticketing API")
-                        .description("콘서트 예매 시스템 API 명세서\n\n 🔐 [주의] 현재는 인증 기능이 작동하지 않으므로 Authorize 버튼은 사용 불가합니다.")
+                        .description("콘서트 예매 시스템 API 명세서")
                         .version("v1.0"))
 
-                /**
-                 * 💡 [주의] 현재 JWT 인증 필터는 구현되지 않았기 때문에
-                 * Swagger Authorize 버튼을 눌러도 실제 인증은 동작하지 않습니다.
-                 * 로그인/토큰 담당자가 JWT 필터를 구현한 후 연동됩니다.
-                 */
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName,
@@ -42,23 +46,14 @@ public class SwaggerConfig {
                                         .bearerFormat("JWT")));         // 형식: JWT
     }
 
+    @Bean
+    public GroupedOpenApi devApi() {
+            return GroupedOpenApi.builder()
+                    .group("1. 기능 구현 API 모음")
+                    .pathsToMatch("/api/**")
+                    .build();
+    }
 
-
-    //  API 그룹 나누기 — Swagger UI에 구분된 그룹으로 표시됨
-    // 기능 구현 API 그룹
-        @Bean
-        public GroupedOpenApi devApi() {
-                return GroupedOpenApi.builder()
-                        .group("1. 기능 구현 API 모음")
-                        .pathsToMatch("/api/**")
-//                        .pathsToExclude("/test/**")
-//                        .pathsToExclude("/health/**")
-//                        .pathsToExclude("/redis/**")
-                        .build();
-        }
-
-
-    // Redis 테스트 API 그룹
     @Bean
     public GroupedOpenApi redisTestApi() {
         return GroupedOpenApi.builder()
@@ -67,7 +62,6 @@ public class SwaggerConfig {
                 .build();
     }
 
-    // 헬스체크 관련 API 그룹
     @Bean
     public GroupedOpenApi healthApi() {
         return GroupedOpenApi.builder()
@@ -76,17 +70,15 @@ public class SwaggerConfig {
                 .build();
     }
 
-    // 초기 테스트 API 그룹
-        @Bean
-        public GroupedOpenApi initTestApi() {
-                return GroupedOpenApi.builder()
-                        .group("4. 초기 테스트 API 모음")
-                        .pathsToMatch("/test/**")
-                        .pathsToExclude("/test/redis/**")
-                        .build();
-        }
+    @Bean
+    public GroupedOpenApi initTestApi() {
+            return GroupedOpenApi.builder()
+                    .group("4. 초기 테스트 API 모음")
+                    .pathsToMatch("/test/**")
+                    .pathsToExclude("/test/redis/**")
+                    .build();
+    }
 
-    // 전체 API 그룹
     @Bean
     public GroupedOpenApi allApi() {
         return GroupedOpenApi.builder()

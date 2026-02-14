@@ -4,34 +4,28 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * ✅ CORS 설정 프로퍼티 클래스
- * <p>
- * application-dev.yml 또는 application.properties 파일에 정의된
- * cors.allowed-origins 값을 주입받아 관리합니다.
- * </p>
+ * CORS 설정 프로퍼티 클래스
  *
- * 📌 주요 설정:
- * <ul>
- *   <li>프론트엔드에서 접근 허용할 도메인(origin) 목록 정의</li>
- *   <li>배열(String[]) 또는 리스트(List&lt;String&gt;)로 구성 가능</li>
- *   <li>WebSocket 및 Spring Security CORS 설정에서 재사용</li>
- * </ul>
+ * [ 쉬운 설명 ]
+ * CORS(Cross-Origin Resource Sharing)란?
+ * → 브라우저에서 "다른 주소(origin)"의 서버에 요청을 보낼 수 있게 허용하는 정책
  *
- * 📁 설정 예시 (application.yml):
- * <pre>
- * cors:
- *   allowed-origins:
- *     - http://localhost:3000
- *     - https://mydomain.com
- * </pre>
+ * 예: 프론트엔드가 http://localhost:3000 에서 실행 중이고,
+ *     백엔드가 http://localhost:8080 에서 실행 중이면
+ *     → 주소(origin)가 다르므로 브라우저가 요청을 차단함!
+ *     → CORS 설정으로 "localhost:3000은 허용해줘"라고 알려줘야 함
+ *
+ * 이 클래스는 "어떤 주소(origin)를 허용할지" 목록을 yml에서 읽어와 보관하는 역할
+ *
+ * yml 설정 예시:
+ *   cors:
+ *     allowed-origins:
+ *       - http://localhost:3000       ← 개발용 프론트엔드
+ *       - https://ticketmon.com       ← 운영용 프론트엔드
  */
 
 @Data
 @ConfigurationProperties(prefix = "cors")
 public class CorsProperties {
     private String[] allowedOrigins;
-
-    public String[] getAllowedOrigins() {
-        return allowedOrigins;
-    }
 }

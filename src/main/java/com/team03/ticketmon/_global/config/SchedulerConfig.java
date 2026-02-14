@@ -5,24 +5,24 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 스케줄러 설정 클래스
- * 기능:
- * - Spring의 @Scheduled 애노테이션 기반 스케줄러 활성화
- * - SeatCacheWarmupScheduler 등의 스케줄러 컴포넌트들이 동작할 수 있도록 설정
+ *
+ * [ 쉬운 설명 ]
+ * 이 클래스를 켜면 다른 클래스에서 @Scheduled 어노테이션을 사용할 수 있음
+ *
+ * @Scheduled 사용 예시:
+ *   @Scheduled(fixedRate = 5 * 60 * 1000)  ← 5분마다 실행
+ *   public void warmUpSeatCache() {
+ *       // 좌석 캐시를 미리 준비하는 코드
+ *   }
+ *
+ *   @Scheduled(fixedRate = 10 * 1000)       ← 10초마다 실행
+ *   public void processWaitingQueue() {
+ *       // 대기열을 처리하는 코드
+ *   }
  */
+
 @Configuration
 @EnableScheduling
 public class SchedulerConfig {
-
-    /**
-     * @EnableScheduling 애노테이션으로 스케줄러 기능을 활성화합니다.
-     *
-     * 활성화되는 스케줄러들:
-     * - SeatCacheWarmupScheduler: 좌석 캐시 자동 Warm-up (5분마다)
-     * - WaitingQueueScheduler: 대기열 처리 (10초마다) - 기존 구현
-     *
-     * 주의사항:
-     * - 개발/테스트 환경에서는 스케줄러를 비활성화할 수 있습니다.
-     * - application.yml에서 spring.task.scheduling.enabled: false로 설정 가능
-     */
 
 }
