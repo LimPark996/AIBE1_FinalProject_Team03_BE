@@ -26,14 +26,20 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.async.DeferredResult;
 
 /**
- * 예매(Booking)와 관련된 HTTP 요청을 처리하는 API 컨트롤러
+ * BookingController — 예매(Booking) REST API 엔드포인트
  *
- * <p>
- * 이 컨트롤러는 클라이언트의 요청을 받아 서비스 계층에 전달하고,
- * 그 결과를 표준화된 응답 형식인 {@link SuccessResponse}로 감싸 반환
- * 모든 엔드포인트는 인증된 사용자만 접근 가능하다고 가정하며,
- * {@link AuthenticationPrincipal}을 통해 인증된 사용자 정보를 획득
- * </p>
+ * 이 컨트롤러가 담당하는 흐름:
+ *   1. POST /api/bookings
+ *      좌석 영구 선점 → Facade 호출로 PENDING 예매 + 결제 초기화 → 실패 시 좌석 보상 복원
+ *   2. POST /api/bookings/{bookingId}/cancel
+ *      DeferredResult 기반 비동기 취소 (Facade 의 Mono 체인 구독)
+ *   3. GET  /api/bookings/{bookingNumber}
+ *      본인 예매 상세 조회 (소유자 검증 포함)
+ *   4. POST /api/bookings/concerts/{concertId}/seats/restore
+ *      결제창 종료 시 영구 선점된 좌석을 일반 선점(RESERVED)으로 되돌림
+ *
+ * 응답은 {@link SuccessResponse} 로 감싸 표준화하며, 인증 사용자는
+ * {@link AuthenticationPrincipal} 로 주입받는다.
  */
 @Tag(name = "예약 API", description = "예매 생성, 취소 관련 API")
 @Slf4j
@@ -48,6 +54,10 @@ public class BookingController {
     private static final long TIMEOUT_MS = 10_000L;
 
 
+    /**
+     * 선택 좌석을 영구 선점한 뒤 PENDING 예매를 만들고 결제 준비 정보를 반환한다.
+     * 어느 단계에서든 실패하면 좌석 보상 복원을 시도한다.
+     */
     @Operation(summary = "예매 생성 및 결제 준비", description = "좌석 영구 선점 후 예매를 생성하고, 즉시 결제에 필요한 정보를 반환합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "예매 정보 생성 성공"),
@@ -159,6 +169,9 @@ public class BookingController {
         return dr;
     }
 
+    /**
+     * 예매번호로 본인 예매 상세를 조회한다. (소유자가 아니면 AccessDenied)
+     */
     @Operation(summary = "예매 정보 조회", description = "bookingNumber로 예매 상세 정보를 반환합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "조회 성공"),
@@ -175,6 +188,10 @@ public class BookingController {
         return ResponseEntity.ok(SuccessResponse.of("예매 정보 조회가 완료되었습니다.", dto));
     }
 
+    /**
+     * 사용자가 결제창을 닫은 경우, 영구 선점된 좌석을 일반 선점(RESERVED, TTL 5분)으로 되돌린다.
+     * 부분 성공 시에도 결과 DTO 에 성공/실패 카운트를 담아 반환한다.
+     */
     @Operation(summary = "결제 취소 시 좌석 복원", description = "결제창 닫기 시 영구 선점된 좌석을 일반 선점 상태로 복원합니다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "좌석 복원 성공"),

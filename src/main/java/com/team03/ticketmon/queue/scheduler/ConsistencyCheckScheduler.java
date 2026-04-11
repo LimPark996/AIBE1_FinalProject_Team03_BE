@@ -13,6 +13,18 @@ import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
+/**
+ * ConsistencyCheckScheduler — 대기열 카운터 정합성 보정 스케줄러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 주기적으로 '활성 사용자 카운터' 와 실제 active_sessions 크기를 비교
+ *   2. 두 값이 일치하지 않으면 카운터를 실제 세션 수로 덮어써 보정
+ *   3. 분산 락으로 다중 인스턴스 동시 실행 방지
+ *
+ * 동작 흐름:
+ *   - 장애·네트워크 이슈 등으로 카운터만 증가/감소되어 불일치가 생긴 경우
+ *     일정 주기마다 이 보정 작업으로 self-healing 수행
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

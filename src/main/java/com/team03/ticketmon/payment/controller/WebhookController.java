@@ -26,6 +26,19 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * WebhookController — 토스페이먼츠 웹훅 수신 엔드포인트
+ *
+ * 이 클래스가 하는 일:
+ *   1. 토스페이먼츠에서 보내는 웹훅 페이로드 수신 및 JSON 파싱
+ *   2. HMAC-SHA256 기반 서명 검증 (PAYMENT_STATUS_CHANGED는 서명 미발급이라 예외)
+ *   3. PAYMENT_STATUS_CHANGED 이벤트에 한해 PaymentService로 상태 동기화 위임
+ *
+ * 동작 흐름:
+ *   - 토스 서버 → POST /api/v1/webhooks/toss/payment-updates
+ *   - 서명 검증(필요 시) → orderId/status 추출 → PaymentService.updatePaymentStatusByWebhook
+ *   - 예외가 나도 토스가 재전송하지 않도록 파싱 오류는 2xx로 응답
+ */
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/webhooks/toss")

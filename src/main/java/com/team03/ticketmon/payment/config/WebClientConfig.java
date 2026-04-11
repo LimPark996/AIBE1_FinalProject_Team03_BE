@@ -9,6 +9,10 @@ import io.netty.handler.logging.LogLevel;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.transport.logging.AdvancedByteBufFormat;
 
+/**
+ * WebClientConfig — 토스페이먼츠 등 외부 API 호출용 WebClient 빈 설정.
+ * Reactor Netty 기반이며 wiretap으로 요청/응답 로그를 상세히 남긴다.
+ */
 @Configuration // 💡 이 클래스가 Spring의 설정 파일임을 나타냅니다.
 public class WebClientConfig {
 

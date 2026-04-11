@@ -7,6 +7,10 @@ import lombok.*;
 
 import java.math.BigDecimal;
 
+/**
+ * Ticket 엔티티 — Booking 과 ConcertSeat 을 1:1 로 연결하는 좌석권.
+ * 생성은 {@link #createTicket(ConcertSeat)} 팩토리를 통해서만 수행한다.
+ */
 @Entity
 @Table(name = "tickets")
 @Getter

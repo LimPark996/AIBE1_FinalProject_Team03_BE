@@ -15,6 +15,16 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import java.io.IOException;
 import java.util.Collection;
 
+/**
+ * OAuth2LoginSuccessHandler — 소셜 로그인 성공 핸들러
+ *
+ * 이 핸들러가 하는 일:
+ *   1. OAuth2User에서 email을 꺼내 UserEntity를 조회
+ *   2. userId/username/role을 구성하여 CookieUtil로 Access/Refresh Token 쿠키 발급
+ *   3. 프론트엔드 baseUrl로 리다이렉트하여 로그인 완료
+ *
+ * Spring Security OAuth2 로그인 성공 지점에서 호출된다.
+ */
 @RequiredArgsConstructor
 public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 

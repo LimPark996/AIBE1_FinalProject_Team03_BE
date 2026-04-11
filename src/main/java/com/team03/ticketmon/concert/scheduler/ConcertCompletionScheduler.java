@@ -19,6 +19,18 @@ import com.team03.ticketmon.concert.repository.ConcertRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * ConcertCompletionScheduler — 콘서트 상태 전이 스케줄러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 매분 예매 시작 시각이 된 SCHEDULED 콘서트를 ON_SALE로 전환
+ *   2. 매분 예매 종료 시각이 지난 ON_SALE 콘서트를 BOOKING_CLOSED로 전환
+ *   3. 매분 공연 종료 30분 뒤 활성 콘서트를 COMPLETED로 전환 (CANCELLED 제외)
+ *
+ * 동작 흐름:
+ *   - @Scheduled 트리거 → 대상 상태의 콘서트 목록 조회 → 각 콘서트의 시각 조건 판정
+ *     → 조건 충족 시 상태 변경 + save → BatchExecutionLog에 실행 결과 기록
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

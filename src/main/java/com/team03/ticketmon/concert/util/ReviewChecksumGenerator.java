@@ -5,6 +5,10 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import com.team03.ticketmon.concert.domain.Review;
 
+/**
+ * ReviewChecksumGenerator — 리뷰 목록의 MD5 체크섬 생성
+ * 리뷰 ID 기준 정렬 + 내용/평점 직렬화 후 MD5 해싱하여 내용 변경 감지에 사용한다.
+ */
 @Component // Spring의 Bean으로 등록하여 의존성 주입 가능하게 함
 public class ReviewChecksumGenerator {
 

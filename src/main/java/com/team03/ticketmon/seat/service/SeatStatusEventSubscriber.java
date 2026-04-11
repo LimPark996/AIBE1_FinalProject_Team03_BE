@@ -17,10 +17,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 좌석 상태 변경 이벤트 구독 서비스 (개선된 버전)
- * - Redis Pub/Sub 채널에서 좌석 상태 변경 이벤트 수신
- * - 수신된 이벤트를 SeatPollingSessionManager에 전달하여 대기 중인 클라이언트들에게 알림
- * - 연결 안정성 및 오류 처리 강화
+ * SeatStatusEventSubscriber — 좌석 상태 변경 이벤트 구독자
+ *
+ * 이 클래스가 하는 일:
+ *   1. 애플리케이션 시작 시 Redis 패턴 토픽({@code seat:status:update:*})을 구독
+ *   2. 수신한 {@link SeatUpdateEventDTO}를 파싱해 콘서트 ID를 식별
+ *   3. {@link SeatPollingSessionManager}로 이벤트를 전달해 대기 중인 폴링 세션을 깨움
+ *   4. 처리 성공/실패 카운터 및 구독 상태를 보관해 관리자 대시보드에 노출
+ *
+ * 애플리케이션 종료 시 {@code @PreDestroy}로 리스너를 해제하여 리소스 누수를 방지한다.
  */
 @Slf4j
 @Service

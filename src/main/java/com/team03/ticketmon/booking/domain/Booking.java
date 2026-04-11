@@ -34,8 +34,20 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * Booking Entity
- * 예매 정보 관리
+ * Booking 엔티티 — 하나의 예매 단위
+ *
+ * 보유 관계:
+ *   - Concert (N:1) : 대상 콘서트
+ *   - Ticket  (1:N, cascade + orphanRemoval) : 좌석별 티켓
+ *   - Payment (1:1, mappedBy="booking") : 연동된 결제
+ *
+ * 상태 흐름(BookingStatus):
+ *   PENDING_PAYMENT → (결제 성공) → CONFIRMED
+ *                   → (15분 TTL 또는 사용자 취소) → CANCELED
+ *   CONFIRMED → (공연 종료 후 일괄 처리) → COMPLETED
+ *
+ * 생성 시 총액은 각 티켓 가격 합 + 서비스 수수료(2000원) 로 계산된다.
+ * 생성은 정적 팩토리 {@link #createBooking} 을 통해서만 허용한다.
  */
 
 @Entity

@@ -4,8 +4,8 @@ import java.util.List;
 import com.team03.ticketmon.concert.domain.Review;
 
 /**
- * 토큰 계산 유틸리티 클래스
- * 순수 계산 로직만 수행하므로 static 메서드로 구현
+ * TokenCalculator — 리뷰/문자열의 대략적인 LLM 토큰 수 추정 유틸
+ * 한국어 기준 문자당 약 2.5토큰으로 근사 계산하며, 순수 static 메서드로만 구성된다.
  */
 public final class TokenCalculator {
 

@@ -41,6 +41,26 @@ import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * PaymentService — 결제 처리 핵심 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 예매(Booking)에 대한 결제 요청 생성 및 토스페이먼츠 결제창 URL 전달
+ *   2. 토스페이먼츠 "승인 API" 호출 → 결제 상태 PENDING → DONE 전이
+ *   3. 결제 취소/환불 시 토스페이먼츠 "취소 API" 호출 및 취소 이력 저장
+ *   4. 웹훅 수신 기반 결제 상태 동기화(상태 전이 방어 로직 포함)
+ *   5. 결제 완료 시 좌석 상태(BOOKED) 전환까지 일괄 수행
+ *
+ * 동작 흐름:
+ *   - Booking(PENDING_PAYMENT) → initiatePayment → orderId 발급 → 프론트 결제창
+ *   - 사용자 결제 완료 → /success 콜백 → confirmPayment → 토스 승인 API → Booking CONFIRMED, 좌석 BOOKED
+ *   - 실패/취소 → handlePaymentFailure / cancelPayment → 상태 복구 및 Booking 취소
+ *   - 비동기 서버 간 이벤트 → updatePaymentStatusByWebhook 로 상태 동기화
+ *
+ * 외부 API:
+ *   - Toss Confirm: POST https://api.tosspayments.com/v1/payments/confirm
+ *   - Toss Cancel : POST https://api.tosspayments.com/v1/payments/{paymentKey}/cancel
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -56,6 +76,11 @@ public class PaymentService {
     private final UserRepository userRepository;
     private final SeatStatusService seatStatusService;
 
+    /**
+     * 결제 요청을 초기화한다. 예매 소유자/상태 검증 후 orderId를 발급하여
+     * 프론트가 토스페이먼츠 결제창을 띄우는 데 필요한 정보를 반환한다.
+     * 기존 PENDING 결제가 있으면 재사용한다. (트랜잭션 쓰기)
+     */
     @Transactional
     public PaymentExecutionResponse initiatePayment(Booking booking, Long currentUserId) {
         if (booking == null) {
@@ -103,6 +128,10 @@ public class PaymentService {
                 .build();
     }
 
+    /**
+     * Payment를 저장하고 연결된 Booking을 CONFIRMED로 확정한다.
+     * (영속성 컨텍스트가 유효한 범위 내에서 Booking.confirm 호출)
+     */
     @Transactional
     public void savePayment(Payment payment) {
         paymentRepository.save(payment);
@@ -111,6 +140,11 @@ public class PaymentService {
     }
 
 
+    /**
+     * 결제 승인 처리(비동기). DB에서 Payment 로드 → 상태/금액 검증 →
+     * 토스페이먼츠 승인 API 호출 → 응답 검증 → Payment DONE / Booking CONFIRMED /
+     * 좌석 BOOKED 전이까지 일괄 수행한다. 블로킹 작업은 boundedElastic 풀에서 실행.
+     */
     @Transactional
     public Mono<Void> confirmPayment(PaymentConfirmRequest req) {
         // 1) DB에서 Payment 로드 & 검증
@@ -210,6 +244,10 @@ public class PaymentService {
                 .then();  // Mono<Void> 반환
     }
 
+    /**
+     * 토스페이먼츠 실패 리다이렉트 처리. PENDING 결제만 FAILED로 전이하고
+     * 연결된 Booking도 취소 상태로 돌린다.
+     */
     @Transactional
     public void handlePaymentFailure(String orderId, String errorCode, String errorMessage) {
         paymentRepository.findByOrderId(orderId).ifPresent(payment -> {
@@ -221,6 +259,11 @@ public class PaymentService {
         });
     }
 
+    /**
+     * 결제 취소(비동기). 소유권/상태 검증 후 토스페이먼츠 취소 API를 호출하고,
+     * 응답의 cancels 정보를 PaymentCancelHistory로 저장한다.
+     * 검증/DB 반영은 boundedElastic 풀에서 수행한다.
+     */
     @Transactional
     public Mono<Void> cancelPayment(Booking booking,
                                     PaymentCancelRequest cancelRequest,
@@ -280,6 +323,9 @@ public class PaymentService {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
+    /**
+     * 특정 사용자의 전체 결제 내역을 조회한다. (읽기 전용)
+     */
     @Transactional(readOnly = true)
     public List<PaymentHistoryDto> getPaymentHistoryByUserId(Long userId) {
         return paymentRepository.findByUserId(userId)

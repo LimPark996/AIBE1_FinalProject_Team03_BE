@@ -12,6 +12,17 @@ import com.team03.ticketmon.concert.dto.ReviewChangeDetectionDTO;
 import com.team03.ticketmon.concert.repository.ReviewRepository;
 import com.team03.ticketmon.concert.util.ReviewChecksumGenerator;
 
+/**
+ * AiSummaryUpdateConditionService — AI 요약 재생성 필요 여부 판정 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트의 현재 유효 리뷰 목록을 조회하고 체크섬을 생성
+ *   2. 최초 생성/리뷰 수 변화/내용 변화(체크섬)/시간 경과 조건을 순서대로 검사
+ *   3. 판정 결과(needsUpdate + changeReason)와 통계를 ReviewChangeDetectionDTO로 반환
+ *
+ * AiBatchSummaryService가 배치 실행 중 각 콘서트마다 호출하여
+ * 불필요한 AI 요청을 줄이는 데 사용된다.
+ */
 @Service // Spring의 Service 계층 Bean으로 등록
 public class AiSummaryUpdateConditionService {
 

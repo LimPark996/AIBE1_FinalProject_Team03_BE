@@ -17,8 +17,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 좌석 배치도 조회 컨트롤러
- * 실제 DB 데이터를 기반으로 한 좌석 배치도 정보를 제공하는 API
+ * SeatLayoutController — 좌석 배치도 조회 컨트롤러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트 전체 좌석 배치도 조회 엔드포인트 제공
+ *   2. 등급별/구역별 좌석 배치 및 가격 정보 조회 엔드포인트 제공
+ *   3. {@link SeatLayoutService}에 위임해 DB + Redis 상태를 결합한 응답을 생성
+ *
+ * 상태를 변경하지 않는 읽기 전용 컨트롤러이며, MEDIUM/LARGE venue에서는
+ * 등급/구역 파라미터를 통해 필요한 부분만 조회하도록 설계되어 있다.
  */
 @Tag(name = "좌석 배치도", description = "실제 DB 기반 좌석 배치도 조회 API")
 @Slf4j

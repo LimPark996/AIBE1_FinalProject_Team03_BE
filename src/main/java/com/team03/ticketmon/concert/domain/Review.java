@@ -8,8 +8,8 @@ import lombok.*;
 import com.team03.ticketmon._global.entity.BaseTimeEntity;
 
 /**
- * Review Entity
- * 실제 관람 후기 관리
+ * Review — 콘서트 관람 후 후기 엔티티
+ * Concert와 ManyToOne으로 연결되며 1~5점 사이의 관람 평점을 보유한다.
  */
 
 @Entity

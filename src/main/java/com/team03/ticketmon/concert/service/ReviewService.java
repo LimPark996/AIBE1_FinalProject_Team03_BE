@@ -17,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-/*
- * Review Service
- * 후기 비즈니스 로직 처리
+/**
+ * ReviewService — 콘서트 후기 CRUD 비즈니스 로직
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트별 후기 페이징 조회 및 단건 상세 조회
+ *   2. 후기 작성/수정/삭제 처리와 Entity ↔ DTO 변환
+ *   3. 리뷰 변경 시 Concert.lastReviewModifiedAt을 갱신하여 AI 요약 재생성 판단 근거 제공
  */
 
 @Service

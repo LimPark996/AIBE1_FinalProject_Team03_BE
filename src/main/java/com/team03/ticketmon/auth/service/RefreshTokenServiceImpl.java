@@ -16,6 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * RefreshTokenServiceImpl — Refresh Token 저장소 관리 서비스
+ *
+ * 이 서비스가 하는 일:
+ *   1. Refresh Token을 Redis에 사용자별 키(JWT_RT_PREFIX + userId)로 저장/삭제
+ *   2. 전달된 Refresh Token의 카테고리/만료/DB(=Redis) 존재 여부를 검증
+ *   3. 검증 실패 시 BusinessException(INVALID_TOKEN) 발생
+ *
+ * 로그인/로그아웃/토큰 재발급 흐름에서 CookieUtil, ReissueService, CustomLogoutFilter 등과 연동된다.
+ */
 @Service
 @Transactional
 @RequiredArgsConstructor

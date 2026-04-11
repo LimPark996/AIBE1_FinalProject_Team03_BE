@@ -12,6 +12,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * loginAPIController — 인증 관련 REST API 컨트롤러
+ *
+ * 엔드포인트:
+ *   - POST /api/auth/login : UsernamePasswordAuthenticationFilter(LoginFilter)가 가로채므로 내부 구현은 비어 있음.
+ *     Swagger 문서화 용도로만 선언된다.
+ *   - GET /api/auth/me    : 현재 SecurityContext의 Authentication에서 CustomUserDetails를 꺼내
+ *                             UserResponseDTO(userId, username, nickname, role)로 반환한다.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @Tag(name = "로그인")

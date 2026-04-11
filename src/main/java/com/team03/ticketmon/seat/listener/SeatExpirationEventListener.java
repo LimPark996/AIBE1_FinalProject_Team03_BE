@@ -15,13 +15,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Redis Key Expiration Event 리스너
- * - Redis에서 TTL이 만료된 키에 대한 이벤트를 수신
- * - 좌석 관련 TTL 키 만료 시 자동으로 좌석 해제 처리
+ * SeatExpirationEventListener — Redis Key Expiration 이벤트 리스너
  *
- * 📋 동작 조건:
- * - Valkey notify-keyspace-events가 'Ex'로 설정되어야 함
- * - 키 패턴: seat:expire:{concertId}:{seatId}
+ * 이 클래스가 하는 일:
+ *   1. Redis {@code __keyevent@*__:expired} 채널을 구독해 TTL 만료 이벤트 수신
+ *   2. 좌석 TTL 키 패턴({@code seat:expire:{concertId}:{seatId}})만 필터링
+ *   3. 만료된 좌석에 대해 {@link SeatStatusService}를 호출해 자동 해제 처리
+ *
+ * 동작 조건:
+ *   - Redis(Valkey) notify-keyspace-events 설정이 최소 {@code Ex}여야 함
+ *   - 만료 이벤트는 keyspace db 번호에 관계없이 수신하도록 패턴 구독 사용
  */
 @Slf4j
 @Component

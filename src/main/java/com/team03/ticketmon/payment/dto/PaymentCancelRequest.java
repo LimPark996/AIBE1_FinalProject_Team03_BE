@@ -7,6 +7,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * PaymentCancelRequest — 결제 취소 요청 DTO. 취소 사유를 토스페이먼츠 취소 API에 그대로 전달한다.
+ */
 @Getter
 @Setter
 @Builder

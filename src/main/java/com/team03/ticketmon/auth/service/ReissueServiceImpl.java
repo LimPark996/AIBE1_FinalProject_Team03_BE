@@ -12,6 +12,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * ReissueServiceImpl — Access/Refresh Token 재발급 서비스
+ *
+ * 이 서비스가 하는 일:
+ *   1. reissueToken: 전달된 Refresh Token을 검증한 뒤 같은 사용자 정보로 새 Access(또는 Refresh) 토큰 생성
+ *   2. handleReissueToken: 요청 쿠키에서 Refresh Token을 꺼내 검증하고,
+ *      CookieUtil로 Access/Refresh를 모두 새로 발급해 응답 쿠키에 주입 (Refresh Rotation)
+ *
+ * JwtAuthenticationFilter(자동 재발급)와 명시적 재발급 API 양쪽에서 호출된다.
+ */
 @Service
 @Transactional
 @RequiredArgsConstructor

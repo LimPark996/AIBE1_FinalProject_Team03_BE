@@ -14,6 +14,18 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import java.io.IOException;
 
+/**
+ * LoginFilter — 폼 기반 로그인 인증 필터 (JWT 발급 포함)
+ *
+ * 이 필터가 하는 일:
+ *   1. POST /api/auth/login 요청에서 username/password를 꺼냄
+ *   2. AuthenticationManager에 위임해 CustomUserDetailsService로 사용자 인증
+ *   3. 인증 성공 시 CookieUtil로 Access/Refresh Token을 발급해 응답 쿠키에 심음 (200 OK)
+ *   4. 인증 실패 시 401 Unauthorized 반환
+ *
+ * Spring Security의 UsernamePasswordAuthenticationFilter를 상속하여
+ * 기본 URL을 /api/auth/login으로 재설정하고, 성공 핸들링을 JWT 쿠키 발급으로 대체한다.
+ */
 public class LoginFilter extends UsernamePasswordAuthenticationFilter {
 
     private final AuthenticationManager authenticationManager;

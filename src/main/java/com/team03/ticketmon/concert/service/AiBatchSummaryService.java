@@ -25,14 +25,19 @@ import com.team03.ticketmon.concert.util.ReviewChecksumGenerator;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 🤖 AI 배치 요약 처리 서비스
+ * AiBatchSummaryService — 콘서트 리뷰 AI 요약 배치 서비스
  *
- * 스케줄링을 통해 주기적으로 콘서트 리뷰들을 AI로 요약하는 배치 작업을 수행합니다.
+ * 이 클래스가 하는 일:
+ *   1. 스케줄러(@Scheduled)로 주기적으로 후보 콘서트를 조회(최소 리뷰 개수 이상)
+ *   2. AiSummaryUpdateConditionService로 업데이트 필요 여부(체크섬/경과 시간 등) 판정
+ *   3. 조건 충족 콘서트에 대해 AiSummaryService 호출 → AI 요약 생성 및 Concert 엔티티 업데이트
+ *   4. 처리 결과(BatchExecutionLog)를 DB에 기록하고 실패 시 재시도 카운터/시각 갱신
  *
- * 팀 예외 처리 규칙 준수:
- * - BusinessException + ErrorCode 사용
- * - GlobalExceptionHandler와 연동
- * - 의미있는 에러 메시지 제공
+ * 동작 흐름:
+ *   - processBatch() → 후보 조회 → for-each(검사 → 처리 → 성공/스킵/실패 집계)
+ *     → BatchExecutionLog 저장 → 결과 DTO 반환
+ *   - 단건 재생성 경로(processConcertAiSummary)는 판매자 수동 재생성에서도 사용되며,
+ *     팀 예외 규칙(BusinessException + ErrorCode)에 맞춰 사용자 친화 메시지를 구성한다.
  */
 @Slf4j
 @Service

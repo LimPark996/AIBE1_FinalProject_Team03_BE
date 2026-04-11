@@ -33,6 +33,20 @@ import com.team03.ticketmon.concert.repository.SellerConcertRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * FileUploadController — 콘서트 포스터 이미지 업로드/삭제/복구 API
+ *
+ * 이 클래스가 하는 일:
+ *   1. 포스터 이미지 업로드 후 원본 URL을 CloudFront URL로 변환하여 Concert 엔티티에 저장
+ *   2. 콘서트 단위(포스터 전체 삭제) 또는 특정 파일 URL 단위의 삭제 처리
+ *   3. 판매자 권한 확인 후 임시 파일 삭제 및 원본 포스터 복구 기능 제공
+ *
+ * 동작 흐름:
+ *   - 업로드: 파일 검증 → 버킷/경로 생성 → StorageUploader 업로드 → CloudFront URL 변환
+ *     → concertId가 있으면 DB 저장 → 실패 시 업로드 파일 롤백
+ *   - 삭제: 판매자 권한 검증 → 스토리지 삭제 → DB의 posterImageUrl을 null 처리
+ *   - 복구: 클라이언트가 넘긴 원본 URL을 CloudFront URL로 변환 후 DB에만 반영(스토리지 무변경)
+ */
 @RestController
 @RequestMapping("/api/upload")
 @RequiredArgsConstructor

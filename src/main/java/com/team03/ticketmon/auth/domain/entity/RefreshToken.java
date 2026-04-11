@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * Redis에 저장되는 Refresh Token 도큐먼트 모델. id 필드는 userId를 의미한다.
+ */
 @Data
 @Builder
 @NoArgsConstructor

@@ -17,9 +17,20 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 주기적으로 대기열을 확인하여 입장 가능 인원을 처리하는 스케줄러.
- * 이 스케줄러는 시스템의 처리량을 조절하는 핵심적인 역할을 담당하며,
- * 분산 환경에서도 단 하나의 인스턴스만 실행되도록 분산 락(Distributed Lock)을 사용.
+ * WaitingQueueScheduler — 대기열 입장 처리 스케줄러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 주기적으로(fixedDelay) Redis 대기열을 확인
+ *   2. 현재 활성 사용자 수를 조회해 빈 슬롯 계산
+ *   3. 빈자리만큼 대기열 앞순서에서 사용자 추출 후 입장 허가
+ *   4. 대기 중인 상위 사용자에게 실시간 순위 알림 발행
+ *
+ * 동작 흐름:
+ *   - @Scheduled 트리거 → 분산 락 획득 시도 (워치독으로 락 자동 갱신)
+ *   - ON_SALE 콘서트 목록 조회 → 콘서트별로 processQueueForConcert 실행
+ *   - processQueueForConcert: available slots 계산 → WaitingQueueService.poll
+ *     → AdmissionService.grantAccess → PersonalizedRankStrategy 로 순위 알림
+ *   - 다중 인스턴스 환경에서 단 하나의 노드만 실행되도록 Redis 분산 락 사용
  */
 @Slf4j
 @Service

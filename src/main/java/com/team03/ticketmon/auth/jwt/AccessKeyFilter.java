@@ -18,6 +18,18 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * AccessKeyFilter — 대기열 통과자 전용 AccessKey 검증 필터
+ *
+ * 이 필터가 하는 일:
+ *   1. 요청 URI가 보호 대상 경로(예: 좌석 API)인지 확인하고 concertId를 추출
+ *   2. 보호 대상이면 SecurityContextHolder에서 인증된 사용자(userId) 확보
+ *   3. 요청 헤더 X-Access-Key 값과 Redis에 저장된 해당 (concertId, userId) AccessKey를 비교
+ *   4. 일치하면 통과, 불일치/누락/조회 실패 시 401/403/500 반환
+ *
+ * Spring Security 필터 체인에서 JwtAuthenticationFilter 뒤에 위치하여
+ * 대기열을 정상적으로 통과한 사용자만 실제 좌석 API에 접근할 수 있도록 한다.
+ */
 @Slf4j
 @RequiredArgsConstructor
 public class AccessKeyFilter extends OncePerRequestFilter {

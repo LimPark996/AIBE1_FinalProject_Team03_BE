@@ -9,6 +9,17 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
+/**
+ * CookieUtil — JWT 쿠키 생성/삭제/세팅 유틸 컴포넌트
+ *
+ * 이 클래스가 하는 일:
+ *   1. HttpOnly + Secure + SameSite=None 쿠키 생성 및 삭제용 ResponseCookie 생성
+ *   2. 로그아웃 시 Access/Refresh 토큰 쿠키 동시 삭제
+ *   3. 로그인/재발급 시 Access/Refresh 토큰을 새로 발급하여 응답 쿠키에 심고,
+ *      Refresh Token은 Redis에 저장(기존 토큰은 삭제 후 갱신)
+ *
+ * LoginFilter, JwtAuthenticationFilter, ReissueService, OAuth2 로그인 성공 핸들러에서 공용으로 사용된다.
+ */
 @Component
 @RequiredArgsConstructor
 public class CookieUtil {

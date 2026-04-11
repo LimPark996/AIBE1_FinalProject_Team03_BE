@@ -11,6 +11,16 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 
+/**
+ * OAuth2LoginFailureHandler — 소셜 로그인 실패 핸들러
+ *
+ * 이 핸들러가 하는 일:
+ *   1. "need_signup" 에러는 신규 사용자 → 프론트 /register 페이지로 리다이렉트(회원가입 유도)
+ *   2. 그 외 실패는 /login 페이지로 리다이렉트
+ *   3. 항상 401 상태를 함께 내려 보낸다
+ *
+ * CustomOAuth2UserService에서 신규 사용자를 감지해 던지는 OAuth2AuthenticationException과 연동된다.
+ */
 @RequiredArgsConstructor
 public class OAuth2LoginFailureHandler implements AuthenticationFailureHandler {
 

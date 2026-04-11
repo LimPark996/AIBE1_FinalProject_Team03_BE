@@ -10,10 +10,13 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * 좌석 폴링 세션 정리 스케줄러
- * - 주기적으로 만료된 폴링 세션들을 정리하여 메모리 누수 방지
- * - 시스템 성능 모니터링 및 로깅
- * - Redis 구독 상태 모니터링
+ * SeatPollingSessionCleanupScheduler — 폴링 세션 정리 스케줄러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 2분마다 {@link SeatPollingSessionManager}의 만료/완료 세션을 정리(메모리 누수 방지)
+ *   2. 정리 전/후의 세션/콘서트 수를 비교해 의미있는 변경이 있을 때만 로깅
+ *   3. {@link SeatStatusEventSubscriber}의 Redis 구독 상태를 주기 모니터링
+ *   4. 관리자 대시보드에 노출할 스케줄러 상태 지표를 보관
  */
 @Slf4j
 @Component

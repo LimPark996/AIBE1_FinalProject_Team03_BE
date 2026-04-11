@@ -14,9 +14,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/*
- * Concert Repository
- * 콘서트 데이터 접근 계층
+/**
+ * ConcertRepository — 콘서트(Concert) 데이터 접근 계층
+ * 키워드/날짜/가격 필터링, 활성 상태(COMPLETED/CANCELLED 제외) 조회,
+ * AI 배치용 최소 리뷰 개수 조건 조회, 대기열/캐시 Warm-up용 쿼리를 제공한다.
  */
 
 @Repository

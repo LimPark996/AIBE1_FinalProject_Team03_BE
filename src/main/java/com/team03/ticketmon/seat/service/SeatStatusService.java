@@ -25,6 +25,25 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * SeatStatusService — 좌석 상태 관리 핵심 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. Redis(Redisson) 기반 좌석 상태 CRUD (AVAILABLE / LOCKED / BOOKED)
+ *   2. 콘서트 capacity type(SMALL/MEDIUM/LARGE)에 따른 키 전략 분기
+ *      - SMALL: 콘서트 단위로 전체 좌석을 하나의 해시에 저장
+ *      - MEDIUM/LARGE: 등급/구역 단위로 분할하여 저장 (Lazy Loading)
+ *   3. 사용자별 선점 좌석 Set 관리(getUserReservedSeatIds 등)로 빠른 내 선점 조회 지원
+ *   4. 좌석 예매 요청 검증 및 상태 전이(예: AVAILABLE → LOCKED, LOCKED → BOOKED)
+ *   5. 상태 변경 시 {@link SeatStatusEventPublisher}를 통한 Pub/Sub 이벤트 발행
+ *   6. 캐시 미스 시 {@link SeatCacheInitService}와 연동해 자동/지연 초기화 수행
+ *
+ * 동작 흐름(예: 예매 선점):
+ *   - 컨트롤러에서 예매 요청 수신
+ *   - Redisson 분산락 획득으로 동시성 제어
+ *   - 현재 상태 확인 → 전이 가능 여부 검증 → 상태 업데이트
+ *   - 사용자 선점 Set에 반영 후 만료/변경 이벤트 발행
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

@@ -9,9 +9,8 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 
-/*
- * Concert DTO
- * 콘서트 정보 전송 객체
+/**
+ * ConcertDTO — 콘서트 응답용 전송 객체 (사용자용 조회 API에서 사용)
  */
 
 @Data

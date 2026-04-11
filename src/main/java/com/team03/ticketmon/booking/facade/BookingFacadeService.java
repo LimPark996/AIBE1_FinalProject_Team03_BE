@@ -14,8 +14,16 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * 예매‑결제 유즈케이스를 하나의 트랜잭션으로 오케스트레이션
- * 하나의 유스케이스를 위한 트랜잭션 단위를 정의
+ * BookingFacadeService — 예매/결제 유스케이스 오케스트레이션
+ *
+ * 이 클래스가 묶는 흐름:
+ *   1. 생성:  createPendingBooking (PENDING_PAYMENT) → initiatePayment
+ *             하나의 @Transactional 경계로 엮어 두 도메인의 원자성을 보장한다.
+ *   2. 취소:  validateCancellableBooking → PaymentService.cancelPayment (비동기)
+ *             → finalizeCancellation (좌석 해제 + CANCELED 전이)
+ *
+ * 취소는 Reactor Mono 체인으로 구성되며, 블로킹 호출은 boundedElastic 스케줄러
+ * 에서 실행된다. finalization 실패 시에는 보상 트랜잭션이 필요하다(TODO).
  */
 @Slf4j
 @Service

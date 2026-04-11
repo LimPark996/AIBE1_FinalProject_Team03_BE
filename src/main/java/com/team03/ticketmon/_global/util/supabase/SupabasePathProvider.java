@@ -10,6 +10,17 @@ import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * SupabasePathProvider — Supabase 프로파일용 저장소 경로 제공자
+ *
+ * 이 클래스가 하는 일:
+ *   1. 프로필/포스터/판매자 서류별 Supabase Storage 내부 경로 생성
+ *   2. Supabase 버킷 이름 제공 (SupabaseProperties 기반)
+ *   3. 운영(S3/CloudFront) → 개발(Supabase) 전환 시 URL 변환 수행
+ *   4. public URL로부터 버킷 내 파일 경로 추출
+ *
+ * 활성 조건: Spring Profile "supabase" 가 활성화된 경우에만 빈으로 등록됩니다.
+ */
 @Slf4j
 @Component
 @Profile("supabase")

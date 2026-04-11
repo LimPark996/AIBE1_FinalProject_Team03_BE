@@ -21,9 +21,20 @@ import java.util.UUID;
 
 
 /**
- * 사용자의 '입장(Admission)'과 관련된 핵심 비즈니스 로직을 처리하는 서비스
- * - 원자적인 슬롯 점유 시도
- * - 여러 사용자에 대한 동시 입장 처리 (AccessKey 발급, 세션 등록 등)
+ * AdmissionService — 대기열 사용자 입장(Admission) 처리 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 원자적인 슬롯 점유 시도 (CAS 기반, 최대 활성 사용자 수 제한)
+ *   2. 단일/다수 사용자에 대한 입장 허가 처리 (AccessKey 발급)
+ *   3. Redis Sorted Set에 활성 세션 등록 및 TTL 관리
+ *   4. 최종 만료 시각(final expiry) 기록으로 세션 연장 한도 제어
+ *   5. 입장 처리 시 Pub/Sub 알림 발행 위임
+ *
+ * 동작 흐름:
+ *   - WaitingQueueService.apply 에서 즉시 입장 시도 시 tryClaimSlot 호출
+ *   - 또는 WaitingQueueScheduler 에서 주기적으로 대기열 poll → grantAccess 호출
+ *   - grantAccess 는 RBatch(파이프라인)로 AccessKey, active_sessions,
+ *     final_expiry, 활성 사용자 카운터 갱신을 원자적으로 수행
  */
 @Slf4j
 @Service

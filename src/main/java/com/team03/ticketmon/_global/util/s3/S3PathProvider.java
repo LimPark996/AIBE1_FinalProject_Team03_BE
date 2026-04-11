@@ -12,6 +12,17 @@ import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * S3PathProvider — S3 프로파일용 저장소 경로 제공자
+ *
+ * 이 클래스가 하는 일:
+ *   1. 프로필/포스터/판매자 서류별 S3 오브젝트 키 생성
+ *   2. S3 직접 URL을 CloudFront URL로 변환 (CDN 제공용)
+ *   3. 마이그레이션 대응: DB에 남아있는 Supabase URL을 CloudFront URL로 변환
+ *   4. public URL로부터 버킷 내 객체 키 추출 (삭제 등 후속 처리에 사용)
+ *
+ * 활성 조건: Spring Profile "s3" 가 활성화된 경우에만 빈으로 등록됩니다.
+ */
 @Slf4j
 @Component
 @Profile("s3")

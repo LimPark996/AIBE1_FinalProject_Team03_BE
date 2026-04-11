@@ -11,9 +11,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-/*
- * Review Repository
- * 후기 데이터 접근 계층
+/**
+ * ReviewRepository — 후기(Review) 데이터 접근 계층
+ * 페이징 조회와 AI 요약용 유효 리뷰 필터(최소 10자 이상) 쿼리를 제공한다.
  */
 
 @Repository

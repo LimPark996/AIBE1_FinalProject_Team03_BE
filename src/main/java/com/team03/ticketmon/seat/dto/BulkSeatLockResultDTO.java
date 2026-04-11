@@ -8,13 +8,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 다중 좌석 영구 선점 처리 결과 DTO
- * 사용자가 선점한 모든 좌석에 대한 일괄 영구 선점/복원 작업의 결과를 담는 record 클래스
- * 기능:
- * - 전체 처리 성공/실패 여부
- * - 개별 좌석별 상세 결과
- * - 성공/실패 통계
- * - 처리 소요 시간
+ * BulkSeatLockResultDTO — 다중 좌석 일괄 영구 선점 처리 결과 DTO.
+ * 개별 좌석 결과 목록, 성공/실패 통계, 보상 트랜잭션 소요 시간 등을 포함한다.
  */
 @Getter
 @Builder

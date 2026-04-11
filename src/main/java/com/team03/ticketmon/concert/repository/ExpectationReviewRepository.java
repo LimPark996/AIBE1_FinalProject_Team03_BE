@@ -9,9 +9,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 
-/*
- * Expectation Review Repository
- * 기대평 데이터 접근 계층
+/**
+ * ExpectationReviewRepository — 기대평(ExpectationReview) 데이터 접근 계층
  */
 
 @Repository

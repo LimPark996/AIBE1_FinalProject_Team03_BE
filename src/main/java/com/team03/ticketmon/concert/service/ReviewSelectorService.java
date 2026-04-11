@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * ReviewSelectorService — AI 프롬프트 토큰 한도 내로 리뷰를 선별
+ * 전체 리뷰의 토큰 합이 한도를 넘으면 최신순으로 한도 내에서 채워서 반환한다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

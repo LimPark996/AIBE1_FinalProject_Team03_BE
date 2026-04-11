@@ -16,9 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Pageable;
 import java.util.Optional;
 
-/*
- * Expectation Review Service
- * 기대평 비즈니스 로직 처리
+/**
+ * ExpectationReviewService — 콘서트 기대평 CRUD 비즈니스 로직
+ * 기대평 페이징 조회, 작성/수정/삭제 처리 및 Entity ↔ DTO 변환을 담당한다.
  */
 
 @Service

@@ -12,6 +12,17 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 
 import java.util.Map;
 
+/**
+ * WebSocketAuthInterceptor — WebSocket 핸드셰이크 인증 인터셉터
+ *
+ * 이 인터셉터가 하는 일:
+ *   1. 핸드셰이크 요청 쿠키에서 Access Token을 꺼내 유효성 검증
+ *   2. 유효하면 userId를 세션 attributes에 저장
+ *   3. 쿼리 파라미터 concertId를 파싱해 attributes에 저장
+ *   4. 하나라도 실패하면 핸드셰이크를 거부(false 반환)
+ *
+ * JWT 필터 체인이 작동하지 않는 WebSocket 연결 단계에서 인증과 컨텍스트(userId, concertId) 주입을 담당한다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

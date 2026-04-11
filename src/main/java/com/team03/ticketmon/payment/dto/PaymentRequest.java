@@ -7,6 +7,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * PaymentRequest — 결제 시작 요청 DTO. 예매번호로 결제 대상을 식별한다.
+ */
 @Getter
 @Setter
 @Builder

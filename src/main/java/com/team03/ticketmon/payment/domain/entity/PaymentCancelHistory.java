@@ -11,6 +11,10 @@ import java.time.LocalDateTime;
 
 // import com.team03.ticketmon.payment.domain.Payment; // 💡 [확인] 이 임포트가 필요할 수 있습니다.
 
+/**
+ * PaymentCancelHistory — 결제 취소 이력 엔티티.
+ * 토스페이먼츠 취소 API 응답의 transactionKey/취소 금액/사유/취소 시각을 저장한다.
+ */
 @Entity
 @Table(name = "payment_cancel_history")
 @Getter

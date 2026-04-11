@@ -19,6 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * SeatCacheInitService — 좌석 캐시 초기화 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. DB의 ConcertSeat 데이터를 Redis 좌석 상태 캐시로 로드
+ *   2. venue capacity type에 따라 초기화 전략 분기
+ *      - SMALL: 콘서트 전체 좌석을 한 번에 초기화 (Eager)
+ *      - MEDIUM/LARGE: 사용자가 접근한 등급/구역만 부분 초기화 (Lazy Loading)
+ *   3. 초기화 시 좌석 수 카운터 및 메타 정보 함께 세팅
+ *
+ * {@link SeatStatusService}, {@link SeatLayoutService}의 캐시 미스 복구 경로와
+ * {@link com.team03.ticketmon.seat.scheduler.SeatCacheWarmupScheduler}에서 호출된다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

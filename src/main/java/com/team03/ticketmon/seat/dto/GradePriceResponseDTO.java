@@ -3,6 +3,7 @@ package com.team03.ticketmon.seat.dto;
 import com.team03.ticketmon.concert.domain.enums.SeatGrade;
 import java.math.BigDecimal;
 
+/** 등급별 가격과 총/가용 좌석 수 응답 DTO. */
 public record GradePriceResponseDTO(
         String grade,
         String gradeName,

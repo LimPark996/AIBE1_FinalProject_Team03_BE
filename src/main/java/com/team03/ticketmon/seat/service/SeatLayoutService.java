@@ -29,7 +29,16 @@ import org.redisson.api.RedissonClient;
 import java.util.ArrayList;
 
 /**
- * 좌석 배치도 관련 비즈니스 로직 서비스
+ * SeatLayoutService — 좌석 배치도 조회 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트의 전체/구역별 좌석 배치도 조회 (venue + 좌석 상태 결합)
+ *   2. venue capacity type(SMALL/MEDIUM/LARGE)에 따른 조회 전략 분기
+ *   3. 등급별/구역별 좌석 수, 가격 정보 집계 응답 생성
+ *   4. 필요 시 {@link SeatCacheInitService}를 통한 캐시 초기화 트리거
+ *
+ * 좌석 상태 데이터는 Redis({@link RedissonClient})에서, venue 메타데이터는
+ * {@link VenueService}에서 가져와 DTO로 변환해 컨트롤러에 반환한다.
  */
 @Slf4j
 @Service

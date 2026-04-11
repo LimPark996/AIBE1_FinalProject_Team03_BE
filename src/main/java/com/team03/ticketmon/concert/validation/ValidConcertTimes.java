@@ -10,8 +10,17 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
- * 콘서트 시간 관련 복합 검증을 위한 커스텀 Validator
- * SellerConcertCreateDTO와 SellerConcertUpdateDTO 모두 지원
+ * ValidConcertTimes — 콘서트 시간 필드들의 복합 제약을 검증하는 커스텀 Bean Validation 애노테이션
+ *
+ * 이 애노테이션이 검증하는 규칙:
+ *   1. 공연 종료 시간 > 시작 시간 (그리고 총 길이 8시간 이내)
+ *   2. 예매 종료 시각 > 예매 시작 시각 (그리고 총 기간 30일 이내)
+ *   3. 예매 시작/종료 시각은 공연 시작 이전이어야 함
+ *
+ * 구현 메모:
+ *   - SellerConcertCreateDTO와 SellerConcertUpdateDTO 모두 지원하기 위해
+ *     리플렉션(get*) 기반으로 필드를 추출한다. 필드가 없으면 해당 규칙은 건너뛴다.
+ *   - 실패 시 개별 필드에 대한 ConstraintViolation을 각각 추가한다.
  */
 @Target({ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)

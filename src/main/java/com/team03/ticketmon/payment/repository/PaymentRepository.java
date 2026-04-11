@@ -10,6 +10,10 @@ import org.springframework.data.repository.query.Param;
 import com.team03.ticketmon.booking.domain.Booking;
 import com.team03.ticketmon.payment.domain.entity.Payment;
 
+/**
+ * PaymentRepository — Payment 엔티티 영속성 Repository.
+ * 웹훅 처리용 fetch join 쿼리를 포함한다.
+ */
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 	Optional<Payment> findByOrderId(String orderId);
 

@@ -20,12 +20,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 /**
- * 좌석 예약 관리 컨트롤러
- * ✅ 수정사항:
- * - ConcertSeatRepository 의존성 추가
- * - DB 존재성 검증 로직 추가
- * - SeatInfoHelper 활용으로 실제 DB 조회
- * - 서비스 레이어에서 분산 락 처리
+ * SeatReservationController — 좌석 임시 선점/해제 컨트롤러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 로그인 사용자의 좌석 임시 선점(Reserve) 요청 처리 (기본 5분 TTL)
+ *   2. 임시 선점 해제(Release) 요청 처리
+ *   3. DB 존재성 검증 후 {@link SeatStatusService}로 위임해 분산락 기반 상태 전이 수행
+ *   4. {@link SeatInfoHelper}를 사용해 응답 DTO에 필요한 좌석 메타 정보를 채움
+ *
+ * 동시성 제어와 TTL, 이벤트 발행은 서비스 레이어에서 담당한다.
  */
 @Tag(name = "좌석 예약 관리", description = "좌석 선점/해제 API (분산 락 적용)")
 @Slf4j

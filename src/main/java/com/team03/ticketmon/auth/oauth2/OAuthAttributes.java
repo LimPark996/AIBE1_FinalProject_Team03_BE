@@ -7,6 +7,13 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * OAuthAttributes — 소셜 로그인 provider별 사용자 정보 정규화 객체
+ *
+ * 구글과 카카오의 서로 다른 응답 구조(name/email 위치, nameAttributeKey)를
+ * 동일한 필드 셋(name, email, provider, providerId, attributes)으로 변환한다.
+ * CustomOAuth2UserService에서 of() 팩터리로 사용된다.
+ */
 @Getter
 @Builder
 public class OAuthAttributes {

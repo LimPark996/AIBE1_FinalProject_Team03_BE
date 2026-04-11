@@ -9,9 +9,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 
-/*
- * Seller Concert DTO
- * 판매자용 콘서트 정보 전송 객체
+/**
+ * SellerConcertDTO — 판매자 콘서트 응답용 전송 객체
+ * 콘서트 기본 정보와 판매자 관점 필드(AI 요약, 포스터 URL 등)를 포함한다.
  */
 
 @Data

@@ -29,8 +29,17 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Review Controller
- * 콘서트 후기 관련 HTTP 요청 처리
+ * ReviewController — 콘서트 관람평(후기) REST API
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트별 후기 목록 페이징 조회 (정렬 필드/방향 지정 가능)
+ *   2. 후기 작성/수정/삭제 엔드포인트 제공
+ *   3. 단일 후기 상세 조회 (concertId + reviewId 조합 검증)
+ *
+ * 동작 흐름:
+ *   - 요청 수신 → PathVariable 검증(@Min) → ReviewService 위임
+ *     → Optional 결과를 ResponseEntity로 매핑 → SuccessResponse 반환
+ *   - 작성 시 요청 본문의 concertId와 PathVariable concertId의 일치 여부를 확인한다.
  */
 @Tag(name = "콘서트 관람평 API", description = "콘서트 후기 작성, 수정, 삭제, 조회 관련 API")
 @RestController

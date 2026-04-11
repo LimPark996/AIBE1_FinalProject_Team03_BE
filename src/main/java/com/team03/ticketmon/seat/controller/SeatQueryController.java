@@ -25,10 +25,15 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * 좌석 상태 조회 컨트롤러 (읽기 전용)
- * - 콘서트 전체 좌석 상태 조회
- * - 개별 좌석 상태 조회
- * - 사용자 선점 좌석 조회
+ * SeatQueryController — 좌석 상태 읽기 전용 컨트롤러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트 전체/개별 좌석 상태 조회 엔드포인트 제공
+ *   2. 로그인 사용자의 선점 좌석 목록 조회
+ *   3. 좌석 가격 정보 조회(읽기 전용)
+ *
+ * 상태 변경은 포함하지 않으며, 내부적으로 {@link SeatStatusService}와
+ * {@link SeatPriceService}를 호출해 캐시/DB에서 읽어 DTO로 변환한다.
  */
 @Tag(name = "좌석 상태 조회", description = "좌석 상태 읽기 전용 API")
 @Slf4j

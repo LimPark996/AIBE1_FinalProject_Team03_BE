@@ -13,11 +13,17 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 좌석 폴링 세션 관리 컴포넌트 (개선된 버전)
- * - 활성 Long Polling 세션들을 콘서트별로 관리
- * - 이벤트 수신 시 해당 콘서트의 모든 대기 세션에 응답
- * - 메모리 누수 방지를 위한 자동 정리 기능
- * - 성능 최적화 및 동시성 개선
+ * SeatPollingSessionManager — Long Polling 세션 관리 컴포넌트
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트별 활성 Long Polling 세션(DeferredResult)을 메모리에 보관
+ *   2. 좌석 변경 이벤트 발생 시 해당 콘서트의 모든 대기 세션에 응답 전달
+ *   3. 만료된/완료된 세션을 주기적으로 정리 (메모리 누수 방지)
+ *   4. 세션 식별자 발급 및 사용자/UA 메타 정보 기록(디버깅 용도)
+ *
+ * 동시성 주의: activeSessions는 ConcurrentHashMap이며, 각 List 조작 시 동기화 필요.
+ * 세션 정리는 {@link com.team03.ticketmon.seat.scheduler.SeatPollingSessionCleanupScheduler}
+ * 에서 주기적으로 호출된다.
  */
 @Slf4j
 @Component

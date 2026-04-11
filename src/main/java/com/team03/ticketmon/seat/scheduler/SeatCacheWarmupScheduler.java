@@ -16,6 +16,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * SeatCacheWarmupScheduler — 좌석 캐시 사전 예열 스케줄러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 주기적으로(기본 20분) 오픈이 임박한 콘서트를 조회
+ *   2. 각 콘서트의 좌석 캐시를 사전 초기화해 오픈 시점의 Cold Start를 방지
+ *   3. 다중 인스턴스 환경에서 중복 실행을 막기 위해 Redisson 분산락 사용
+ *   4. 이미 처리한 콘서트는 "processed" 키로 마킹해 재실행 시 스킵
+ *
+ * 정책: SMALL venue만 Eager 초기화 대상이며, MEDIUM/LARGE는 Lazy Loading을 유지한다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

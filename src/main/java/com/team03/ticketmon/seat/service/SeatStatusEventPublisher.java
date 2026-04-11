@@ -17,10 +17,16 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 좌석 상태 변경 이벤트 발행 서비스 (개선된 버전)
- * - 좌석 상태 변경 시 Redis Pub/Sub 채널에 이벤트 발행
- * - 실시간 좌석 상태 공유를 위한 핵심 컴포넌트
- * - 발행 통계 및 오류 처리 강화
+ * SeatStatusEventPublisher — 좌석 상태 변경 이벤트 발행자
+ *
+ * 이 클래스가 하는 일:
+ *   1. 좌석 상태가 변경될 때마다 Redis Pub/Sub 채널에 이벤트를 발행
+ *   2. 채널 키는 콘서트 단위로 분리({@code seat:status:update:{concertId}})
+ *   3. {@link SeatStatus} 객체/Map을 {@link SeatUpdateEventDTO}로 직렬화
+ *   4. 발행 성공/실패 카운터를 유지해 관리자 대시보드에 노출
+ *
+ * 이 이벤트는 {@link SeatStatusEventSubscriber}가 수신하여 Long Polling 세션에 전달되며,
+ * 이를 통해 클라이언트에게 준실시간으로 좌석 상태가 전파된다.
  */
 @Slf4j
 @Service

@@ -42,8 +42,20 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 
 /**
- * Seller Concert Controller
- * 판매자용 콘서트 관련 HTTP 요청 처리
+ * SellerConcertController — 판매자용 콘서트 관리 REST API
+ *
+ * 이 클래스가 하는 일:
+ *   1. 판매자 본인이 등록한 콘서트 목록/상태별 조회 (페이징, 정렬)
+ *   2. 콘서트 생성/수정/삭제(취소) 엔드포인트 제공
+ *   3. 포스터 이미지 URL 부분 업데이트 처리
+ *   4. 판매자별 콘서트 총 개수 조회
+ *   5. 특정 콘서트의 AI 요약 수동 재생성 (권한 검증 + 실패 정보 기록)
+ *
+ * 동작 흐름:
+ *   - HTTP 요청 수신 → 파라미터/권한 검증 → SellerConcertService 위임
+ *     → DTO 변환 → SuccessResponse 래핑 후 반환
+ *   - AI 요약 재생성은 리뷰 수/품질을 다단계로 검증한 뒤
+ *     AiBatchSummaryService를 통해 처리하고 실패 시 재시도 정보를 기록한다.
  */
 @Slf4j
 @Tag(name = "판매자용 콘서트 API", description = "판매자용 콘서트 등록, 수정, 관리 관련 API")
@@ -611,6 +623,11 @@ public class SellerConcertController {
 		@ApiResponse(responseCode = "404", description = "콘서트를 찾을 수 없음"),
 		@ApiResponse(responseCode = "500", description = "AI 서비스 오류")
 	})
+	/**
+	 * 판매자 요청으로 특정 콘서트의 AI 요약을 수동 재생성한다.
+	 * 리뷰 유무/품질(10자 이상)을 단계별로 검증한 뒤 배치 서비스를 호출하며,
+	 * 실패 시 재시도 횟수와 마지막 실패 시각을 Concert 엔티티에 기록한다.
+	 */
 	@PostMapping("/{concertId}/ai-summary/regenerate")
 	public ResponseEntity<SuccessResponse<String>> regenerateAiSummary(
 		@RequestParam @Min(1) Long sellerId,

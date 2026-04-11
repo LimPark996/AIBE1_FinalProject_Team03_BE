@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Concert Seat Repository
- * 콘서트 좌석 데이터 접근 계층
+ * ConcertSeatRepository — 콘서트 좌석(ConcertSeat) 데이터 접근 계층
+ * 좌석/등급/구역 단위 조회, 가격 조회용 Fetch Join 쿼리, 예매 초기화용 벌크 삭제 쿼리를 제공한다.
  */
 
 @Repository

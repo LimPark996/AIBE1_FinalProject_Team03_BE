@@ -30,8 +30,19 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Concert Service
- * 콘서트 비즈니스 로직 처리
+ * ConcertService — 콘서트 조회/검색/필터/AI 요약 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 전체/상태별 콘서트 페이징·정렬 조회 (COMPLETED, CANCELLED 제외한 활성 상태만)
+ *   2. 키워드/날짜/가격 범위 기반 검색 및 필터링
+ *   3. 단건 상세 조회(캐싱), AI 요약 조회, 대기열 활성 여부 조회
+ *   4. 콘서트 상태 변경 시 상세/검색 캐시 무효화 지원
+ *
+ * 동작 흐름:
+ *   - 요청 → 파라미터/정렬/페이징 검증 → ConcertRepository 호출
+ *     → Entity → DTO 변환(포스터 URL은 CloudFront URL로 변환)
+ *     → 조회 캐시에 반영
+ *   - 관리자/배치 로직에서는 getConcertEntityById()로 엔티티 직접 접근
  */
 @Slf4j
 @Service

@@ -9,6 +9,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.util.Collection;
 
+/**
+ * PersonalizedRankStrategy — 대기열 상위 N명 개인화 순위 알림 전략
+ *
+ * 이 클래스가 하는 일:
+ *   1. 대기열 Sorted Set 에서 상위 top-ranker-count 명 조회
+ *   2. 각 사용자에게 1:1 로 현재 순위 이벤트를 Pub/Sub 발행
+ *
+ * 동작 흐름:
+ *   - WaitingQueueScheduler 가 입장 처리 후 호출
+ *   - NotificationStrategy 인터페이스 구현체로 전략 패턴 적용
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

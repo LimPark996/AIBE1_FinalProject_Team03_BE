@@ -5,9 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-/*
- * Concert Search DTO
- * 콘서트 검색 조건 전송 객체
+/**
+ * ConcertSearchDTO — 콘서트 키워드 검색 요청 DTO
  */
 
 @Data

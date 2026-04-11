@@ -8,6 +8,10 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * Payment — 단일 예매에 대한 결제 엔티티. 주문 ID/금액/결제 상태와
+ * 토스페이먼츠의 paymentKey, 승인 시각 등을 관리한다.
+ */
 @Entity
 @Table(name = "payments")
 @Getter

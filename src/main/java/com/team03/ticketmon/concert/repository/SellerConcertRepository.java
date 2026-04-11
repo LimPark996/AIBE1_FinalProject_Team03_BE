@@ -11,9 +11,9 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.util.List;
 
-/*
- * Seller Concert Repository
- * 판매자용 콘서트 데이터 접근 계층
+/**
+ * SellerConcertRepository — 판매자 관점의 Concert 데이터 접근 계층
+ * 판매자별 페이징/상태 조회, 권한 확인, 포스터 URL 벌크 업데이트 등을 제공한다.
  */
 
 @Repository

@@ -8,7 +8,10 @@ import lombok.Getter;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-//프론트 결제 결과페이지 전송 데이터
+/**
+ * PaymentResponseDto — 프론트 결제 결과 페이지에 전달할 DTO.
+ * 예매번호/공연 정보/좌석 라벨/결제 상태·수단을 한 번에 직렬화한다.
+ */
 @Getter
 public class PaymentResponseDto {
     private final String bookingNumber;

@@ -12,9 +12,19 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 
 /**
- * 대기열 도메인의 Redis 데이터 접근을 전담하는 어댑터 클래스
- * 이 클래스는 서비스 계층과 데이터 인프라(Redis) 사이의 결합도를 낮추고,
- * Redis 관련 책임을 중앙에서 관리합니다.
+ * QueueRedisAdapter — 대기열 도메인 전용 Redis 접근 어댑터
+ *
+ * 이 클래스가 하는 일:
+ *   1. 대기열(Sorted Set), 활성 사용자 카운터, 활성 세션, AccessKey 등
+ *      Redis 자료구조 객체를 반환 (RBucket/RScoredSortedSet/RAtomicLong/RLock/RTopic)
+ *   2. 타임스탬프 + 원자적 시퀀스를 결합한 유니크한 대기열 점수(score) 생성
+ *   3. 스케줄러들의 분산 락 및 Pub/Sub 토픽 획득 창구 제공
+ *
+ * 동작 흐름:
+ *   - 서비스 계층은 Redis 키 포맷이나 Codec 을 직접 알 필요 없이
+ *     이 어댑터를 통해 필요한 Redisson 객체를 받아 사용
+ *   - generateQueueScore 는 동일 ms 내 요청 충돌을 막기 위해
+ *     (timestamp << 21) | sequence 형태의 유일 점수를 생성
  */
 @Slf4j
 @Component
@@ -100,6 +110,9 @@ public class QueueRedisAdapter {
         return redissonClient.getBucket(finalExpiryKey);
     }
 
+    /**
+     * 입장 처리 스케줄러용 분산 락 반환 (다중 인스턴스 동시 실행 방지).
+     */
     public RLock getAdmissionSchedulerLock() {
         String key = RedisKeyGenerator.ADMISSION_SCHEDULER_LOCK_KEY;
         return redissonClient.getLock(key);

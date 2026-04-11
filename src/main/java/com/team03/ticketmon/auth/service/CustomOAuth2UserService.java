@@ -22,6 +22,19 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.Collections;
 import java.util.Optional;
 
+/**
+ * CustomOAuth2UserService — 소셜 로그인 사용자 처리 서비스
+ *
+ * 이 서비스가 하는 일:
+ *   1. DefaultOAuth2UserService를 위임 호출해 provider(구글/카카오)의 사용자 정보를 로드
+ *   2. OAuthAttributes로 정규화 후 provider/providerId/email 필수값 검증
+ *   3. SocialUser가 이미 존재 → 기존 계정으로 로그인 처리
+ *   4. 이메일 기반으로 기존 로컬 계정이 존재 → SocialUser만 추가 연결 후 로그인 처리
+ *   5. 완전한 신규 사용자 → 세션에 OAuthAttributes를 저장하고 "need_signup" 에러를 던져
+ *      OAuth2LoginFailureHandler가 프론트 회원가입 페이지로 리다이렉트하도록 유도
+ *
+ * Spring Security OAuth2 로그인 플로우의 사용자 조회 단계에서 호출된다.
+ */
 @RequiredArgsConstructor
 public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 

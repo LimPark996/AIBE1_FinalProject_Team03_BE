@@ -15,6 +15,20 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * JwtAuthenticationFilter — JWT 쿠키 기반 인증 필터
+ *
+ * 이 필터가 하는 일:
+ *   1. 요청 쿠키에서 Access Token / Refresh Token 추출
+ *   2. Access Token이 유효하면 SecurityContextHolder에 Authentication 주입
+ *   3. Refresh Token이 없거나 만료된 경우 재발급 시도 없이 그대로 통과 (비인증 상태)
+ *   4. Access Token이 만료되고 Refresh Token이 유효하면 ReissueService로 새 Access Token 발급 후 쿠키 갱신
+ *   5. 재발급 실패 시 쿠키 삭제 + 401 응답으로 재로그인 유도
+ *
+ * Spring Security 필터 체인에서 UsernamePasswordAuthenticationFilter 앞에 위치하여
+ * 모든 요청에 대해 토큰 기반 인증을 적용한다. OncePerRequestFilter를 상속하며,
+ * Async Dispatch(DeferredResult 재디스패치) 시에도 동작하도록 설정되어 있다.
+ */
 @Slf4j
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -65,6 +79,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Refresh Token으로 새 Access Token을 발급받아 응답 쿠키에 심어준다.
+     * 실패 시 기존 JWT 쿠키를 모두 지우고 401을 내려보낸다.
+     */
     private String handleTokenReissue(String refreshToken, HttpServletResponse response) throws IOException {
         log.info("Access Token 만료됨 Refresh Token으로 재발급 시도");
 

@@ -29,8 +29,12 @@ import lombok.Setter;
 import lombok.ToString;
 
 /**
- * Concert Entity
- * 콘서트 정보를 관리하는 엔티티
+ * Concert — 콘서트 JPA 엔티티
+ *
+ * 기본 정보(제목/아티스트/공연장), 공연 일정, 예매 기간, 최소 연령,
+ * 상태(ConcertStatus), 포스터 URL, AI 요약 및 재시도 정보 등을 보관한다.
+ * concertSeats/bookings/reviews와의 OneToMany 관계를 가지며,
+ * 대기열 활성 여부(isQueueActive)는 현재 상태가 ON_SALE일 때만 true다.
  */
 
 @Builder

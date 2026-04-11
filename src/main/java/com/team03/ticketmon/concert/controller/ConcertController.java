@@ -34,8 +34,17 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Concert Controller
- * 콘서트 관련 HTTP 요청 처리
+ * ConcertController — 사용자용 콘서트 조회/검색/필터링 REST API
+ *
+ * 이 클래스가 하는 일:
+ *   1. 활성 콘서트 목록 페이징 조회 (정렬 필드/방향 검증 포함)
+ *   2. 키워드 기반 콘서트 검색 (ConcertService 캐싱 활용)
+ *   3. 날짜/가격 등 복합 조건 필터링
+ *   4. 단건 콘서트 상세 조회 및 AI 요약 조회
+ *
+ * 동작 흐름:
+ *   - 요청 → 파라미터 검증(@Min/@Max, 정렬 필드 허용 목록) → ConcertService 위임
+ *     → DTO 반환(SuccessResponse 래핑)
  */
 @Tag(name = "콘서트 API", description = "콘서트 조회, 검색, 필터링 관련 API")
 @RestController

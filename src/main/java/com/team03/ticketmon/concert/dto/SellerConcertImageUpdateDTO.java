@@ -5,9 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-/*
- * Seller Concert Image Update DTO
- * 판매자용 콘서트 이미지 수정 전송 객체
+/**
+ * SellerConcertImageUpdateDTO — 콘서트 포스터 이미지 URL 부분 업데이트 요청 DTO
  */
 
 @Data

@@ -8,8 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * Concert Filter DTO
- * 콘서트 필터 조건 전송 객체
+ * ConcertFilterDTO — 콘서트 목록 필터 조건(날짜/가격 범위) 전송 객체
  */
 
 @Data

@@ -15,6 +15,20 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * CleanupScheduler — 만료 세션 정리 스케줄러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 주기적으로 활성 세션 Sorted Set 에서 만료 시점이 지난 사용자 조회
+ *   2. 만료 사용자들을 제거하고 활성 사용자 카운터를 원자적으로 감소
+ *   3. 분산 락으로 다중 인스턴스 동시 실행 방지
+ *
+ * 동작 흐름:
+ *   - @Scheduled 트리거 → 분산 락 획득 → ON_SALE 콘서트 순회
+ *   - 각 콘서트별 active_sessions.valueRange(0, now) 로 만료자 추출
+ *   - removeAll + CAS 루프로 카운터 감소 (음수 방지)
+ *   - 이 작업으로 확보된 빈자리는 다음 WaitingQueueScheduler 주기에 활용
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor

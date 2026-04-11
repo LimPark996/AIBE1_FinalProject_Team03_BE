@@ -8,8 +8,7 @@ import lombok.AllArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * Expectation Review DTO
- * 기대평 정보 전송 객체
+ * ExpectationReviewDTO — 콘서트 기대평 전송 객체 (요청/응답 공용)
  */
 @Data
 @NoArgsConstructor

@@ -11,6 +11,15 @@ import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.List;
 
+/**
+ * AiSummaryService — 리뷰 리스트로부터 Spring AI ChatClient를 호출해 요약문을 생성
+ *
+ * 동작 흐름:
+ *   1. 리뷰 유효성 검증 (null/empty, 최대 개수)
+ *   2. ReviewSelectorService로 토큰 한도 내 리뷰 선별
+ *   3. 프롬프트 작성 후 ChatClient 호출
+ *   4. 응답 후처리(길이 검증, 공백 정리, 최대 길이 절단)
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

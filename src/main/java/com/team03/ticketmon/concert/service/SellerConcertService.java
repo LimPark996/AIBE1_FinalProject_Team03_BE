@@ -19,9 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/*
- * Seller Concert Service
- * 판매자용 콘서트 비즈니스 로직 처리
+/**
+ * SellerConcertService — 판매자용 콘서트 CRUD 비즈니스 로직
+ *
+ * 이 클래스가 하는 일:
+ *   1. 판매자 콘서트 목록/상태별/개수 조회
+ *   2. 콘서트 생성·수정·취소 처리 (DTO → Entity 변환, 판매자 권한 검증)
+ *   3. 포스터 이미지 URL 업데이트 및 실패 시 Supabase 업로드 롤백
+ *   4. 변경 시 ConcertService 캐시(검색/상세) 무효화 트리거
+ *
+ * 동작 흐름:
+ *   - 요청 → sellerId/concertId 검증 → Repository 호출 → Entity 갱신 → save
+ *     → 필요 시 캐시 evict → DTO 변환 반환
+ *   - 실패 시 업로드된 신규 이미지가 있다면 StorageUploader로 삭제하여 고아 파일 방지
  */
 
 @Slf4j

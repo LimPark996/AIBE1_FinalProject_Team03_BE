@@ -16,6 +16,18 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
 
+/**
+ * S3Uploader — AWS S3 기반 파일 업로더 구현체
+ *
+ * 이 클래스가 하는 일:
+ *   1. MultipartFile을 S3 버킷에 PutObject 로 업로드
+ *   2. 업로드된 S3 직접 URL을 CloudFront URL로 변환하여 반환
+ *   3. public URL로부터 S3 Key 를 추출해 해당 객체를 삭제
+ *
+ * 예외 처리: IOException / S3Exception / 기타 예외는 모두
+ * {@link StorageUploadException} 으로 래핑되어 상위로 전파됩니다.
+ * 활성 조건: Spring Profile "s3" 가 활성화된 경우에만 빈으로 등록됩니다.
+ */
 @Slf4j
 @Component
 @Profile("s3")

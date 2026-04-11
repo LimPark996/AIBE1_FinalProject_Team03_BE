@@ -15,9 +15,18 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Redis Sorted Set을 이용해 콘서트 대기열을 관리하는 서비스
- * 이 서비스는 대기열 추가, 순위 조회, 사용자 추출 등의 핵심 기능을 담당
- * 모든 연산은 원자성(Atomic)을 보장해야 합니다.
+ * WaitingQueueService — 콘서트 대기열 관리 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 사용자를 대기열(Redis Sorted Set)에 등록하고 순번 반환
+ *   2. 슬롯이 비어 있으면 대기열을 거치지 않고 즉시 입장 처리
+ *   3. 대기열 상위 N명을 원자적으로 추출(poll)하여 스케줄러에게 제공
+ *   4. 사용자 상태 조회 (입장 허가 / 대기 중 / 이탈·만료)
+ *
+ * 동작 흐름:
+ *   - apply: tryClaimSlot 으로 즉시 입장 시도 → 실패 시 유니크 점수로 대기열 삽입
+ *   - poll : 스케줄러가 빈 슬롯만큼 앞순서 사용자 제거 후 리스트 반환
+ *   - getUserStatus: AccessKey 존재 → rank 존재 → 둘 다 없음 순서로 판정
  */
 @Slf4j
 @Service
@@ -87,6 +96,10 @@ public class WaitingQueueService {
         return new ArrayList<>(polledItems);
     }
 
+    /**
+     * 특정 사용자의 현재 대기열 상태를 조회 (폴링용).
+     * AccessKey 존재 시 ADMITTED, 아니면 대기 순번, 둘 다 없으면 이탈/만료 응답.
+     */
     public QueueStatusDto getUserStatus(Long concertId, Long userId) {
         // 1. AccessKey가 이미 발급되었는지 먼저 확인
         RBucket<String> accessKeyBucket = queueRedisAdapter.getAccessKeyBucket(concertId, userId);

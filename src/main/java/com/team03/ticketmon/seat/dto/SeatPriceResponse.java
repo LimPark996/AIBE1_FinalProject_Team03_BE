@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 
+/** 개별 좌석(ConcertSeat)의 가격 정보를 담는 응답 DTO. */
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

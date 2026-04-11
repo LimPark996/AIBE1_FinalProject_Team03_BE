@@ -6,6 +6,9 @@ import lombok.Getter;
 
 import java.util.List;
 
+/**
+ * 예매 생성 요청 DTO — 콘서트 ID 와 선택 좌석(ConcertSeat) ID 목록을 담는다.
+ */
 @Getter
 public class BookingCreateRequest {
 

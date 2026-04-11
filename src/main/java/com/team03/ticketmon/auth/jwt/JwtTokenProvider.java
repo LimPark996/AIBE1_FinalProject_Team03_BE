@@ -22,6 +22,19 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.List;
 
+/**
+ * JwtTokenProvider — JWT 생성/검증/파싱 유틸 컴포넌트
+ *
+ * 이 클래스가 하는 일:
+ *   1. application.yml의 jwt.secret을 HMAC-SHA256 SecretKey로 초기화
+ *   2. Access/Refresh 토큰 발급 (category, userId, username, role 클레임 포함)
+ *   3. 토큰 파싱 및 카테고리, userId, username, roles 추출
+ *   4. 만료 여부 확인 및 Authentication 객체 생성(SecurityContext 주입용)
+ *   5. HttpServletRequest 쿠키에서 토큰 문자열 추출
+ *
+ * Spring Security 인증 필터(LoginFilter, JwtAuthenticationFilter 등)와 ReissueService에서 공용으로 사용되는
+ * 핵심 토큰 처리 컴포넌트이다.
+ */
 @Component
 public class JwtTokenProvider {
 
@@ -46,7 +59,9 @@ public class JwtTokenProvider {
         this.jwtSecretKey = Keys.hmacShaKeyFor(secretKey.getBytes()); // JWT용 시크릿 키 변환
     }
 
-    // JWT Token 생성
+    /**
+     * JWT 토큰을 생성한다. category에 따라 만료 시간이 달라진다(access/refresh).
+     */
     public String generateToken(String category, Long userId, String username, String role) {
         Instant now = Instant.now();
         Date expiration = new Date(now.toEpochMilli() + getExpirationMs(category));
@@ -115,7 +130,9 @@ public class JwtTokenProvider {
         }
     }
 
-    // JWT Token 검증
+    /**
+     * 토큰의 만료 여부만 구분한다. 서명 등 다른 검증 실패는 BadCredentialsException으로 전파된다.
+     */
     public boolean isTokenExpired(String token) {
         try {
             Claims claims = parseClaims(token); // throw 되지 않으면 유효
@@ -128,6 +145,10 @@ public class JwtTokenProvider {
         return false;
     }
 
+    /**
+     * 토큰 클레임으로부터 CustomUserDetails를 구성해 Authentication 객체로 래핑한다.
+     * JwtAuthenticationFilter에서 SecurityContextHolder에 주입될 때 사용된다.
+     */
     public Authentication getAuthentication(String token) {
         Long userid = getUserId(token);
         String username = getUsername(token);

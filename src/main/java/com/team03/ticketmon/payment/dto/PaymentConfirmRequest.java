@@ -6,6 +6,10 @@ import lombok.*;
 
 import java.math.BigDecimal;
 
+/**
+ * PaymentConfirmRequest — 토스페이먼츠 결제 승인 API 호출용 요청 DTO.
+ * paymentKey/orderId/amount는 토스가 필수로 요구하는 값이다.
+ */
 @Getter
 @Setter
 @Builder

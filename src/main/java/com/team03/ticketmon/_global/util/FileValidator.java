@@ -6,6 +6,16 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+/**
+ * FileValidator — 업로드 파일 공통 검증 유틸
+ *
+ * 이 클래스가 하는 일:
+ *   1. 빈 파일/Content-Type null 여부 확인
+ *   2. 최대 파일 크기(10MB) 초과 여부 확인
+ *   3. 허용 MIME 타입(jpeg, png, webp, pdf) 여부 확인
+ *
+ * 검증 실패 시 {@link BusinessException}을 던지며, 세부 사유는 {@link ErrorCode}로 매핑됩니다.
+ */
 public class FileValidator {
 
     // 변경: 기존 2MB에서 10MB로 파일 크기 제한을 상향 조정했습니다.

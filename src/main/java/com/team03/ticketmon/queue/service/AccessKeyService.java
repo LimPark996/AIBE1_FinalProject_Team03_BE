@@ -13,6 +13,19 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * AccessKeyService — 입장 허가 키(AccessKey) 생명주기 관리 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. 사용자의 AccessKey TTL 을 요청에 따라 연장 (하트비트/결제 진행 등)
+ *   2. '최종 만료 시각' 을 기준으로 최대 세션 시간을 초과하지 않도록 제한
+ *   3. 사용자 이탈 시 세션을 만료 예정으로 마킹 → CleanupScheduler 가 회수
+ *
+ * 동작 흐름:
+ *   - extendAccessKey: 최종 만료 시각 대비 남은 수명 계산 → 목표 TTL 산정
+ *     → 현재 남은 TTL 보다 클 때만 갱신 (단축 방지) → active_sessions 점수 동기화
+ *   - invalidateAccessKey: active_sessions 점수를 0 으로 설정해 즉시 만료 대상 처리
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor

@@ -31,8 +31,24 @@ import java.util.stream.Collectors;
 
 
 /**
- * 예매(Booking)와 관련된 핵심 비즈니스 로직을 처리하는 서비스
- * ✅ 수정사항: 매개변수명 일관성 확보 (concertSeatId 사용)
+ * BookingService — 예매 생성/조회/취소 핵심 서비스
+ *
+ * 이 클래스가 하는 일:
+ *   1. Redis 선점 상태를 전제로 PENDING_PAYMENT 예매 생성
+ *   2. 선택한 좌석에 남아있는 미완성(결제 대기) 예매를 정리하고 좌석 상태 복구
+ *   3. 예매 상세/목록 조회 및 소유자 검증
+ *   4. 취소 가능 여부 검증 후 좌석 해제 · 상태 전이 · 히스토리 이관
+ *   5. 15분 이상 방치된 PENDING 예매를 스케줄러로 자동 정리
+ *
+ * 상태 흐름:
+ *   PENDING_PAYMENT → (결제 성공) → CONFIRMED → (사용자 취소) → CANCELED
+ *   PENDING_PAYMENT → (15분 TTL 경과) → 자동 삭제
+ *
+ * 외부 연동:
+ *   - SeatStatusService / SeatCacheInitService : Redis 좌석 상태 · 캐시
+ *   - PaymentRepository : 정리 시 연결된 결제 엔티티 삭제
+ *
+ * 참고: 매개변수명은 concertSeatId 로 일관되게 맞춤.
  */
 @Slf4j
 @Service
@@ -177,7 +193,9 @@ public class BookingService {
     }
 
     /**
-     * PENDING 상태 예매 완전 정리
+     * PENDING_PAYMENT 상태의 예매를 완전히 정리한다.
+     * 좌석-티켓 연관관계 해제 → Redis 좌석 해제 → Payment 삭제 → Ticket/Booking 삭제 순으로 진행한다.
+     * (자체 트랜잭션으로 실행되며 PENDING 외 상태는 안전하게 무시한다.)
      */
     @Transactional
     public void cleanupPendingBooking(Long bookingId) {
@@ -240,6 +258,9 @@ public class BookingService {
         }
     }
 
+    /**
+     * 특정 사용자의 전체 예매 목록을 조회한다. (콘서트/티켓/좌석 fetch join)
+     */
     @Transactional
     public List<Booking> findBookingList(Long userId) {
         if (!userRepository.existsById(userId)) {
@@ -249,6 +270,9 @@ public class BookingService {
         return bookingRepository.findByUserId(userId);
     }
 
+    /**
+     * 예매번호로 예매 상세를 조회한다. (사용자 존재 여부 선검증)
+     */
     @Transactional
     public Optional<Booking> findBookingDetail(Long userId, String bookingNumber) {
         if (!userRepository.existsById(userId)) {
@@ -258,8 +282,9 @@ public class BookingService {
     }
 
     /**
-     * 기존 finalizeCancellation(Booking) 대신에,
-     * 내부에서 bookingId로 다시 로드하도록 변경합니다.
+     * 결제 취소가 완료된 예매의 내부 상태를 마무리한다.
+     * 좌석(Redis/ConcertSeat) 해제 → Booking·Payment 상태 CANCELED 전이 →
+     * 히스토리 이관 → Ticket 정리 순으로 처리한다. (bookingId 로 세션 내 재로드)
      */
     @Transactional
     public void finalizeCancellation(Long bookingId) {

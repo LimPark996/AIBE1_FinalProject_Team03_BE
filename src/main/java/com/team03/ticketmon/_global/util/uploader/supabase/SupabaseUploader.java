@@ -17,6 +17,19 @@ import java.util.concurrent.ExecutionException;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor; // RequiredArgsConstructor 어노테이션 추가
 
+/**
+ * SupabaseUploader — Supabase Storage 기반 파일 업로더 구현체
+ *
+ * 이 클래스가 하는 일:
+ *   1. MultipartFile을 임시 파일로 저장 후 Supabase Storage에 업로드
+ *   2. 업로드된 파일의 public URL을 반환
+ *   3. public URL로부터 경로를 추출해 파일 삭제 수행
+ *   4. 업로드 완료/실패와 무관하게 임시 파일을 정리
+ *
+ * 예외 처리: IO / Interrupted / Execution 예외는 모두
+ * {@link StorageUploadException} 으로 래핑되어 상위로 전파됩니다.
+ * 활성 조건: Spring Profile "supabase" 가 활성화된 경우에만 빈으로 등록됩니다.
+ */
 @Slf4j
 @Component
 @Profile("supabase")

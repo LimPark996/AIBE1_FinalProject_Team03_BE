@@ -21,10 +21,18 @@ import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /**
- * 좌석 상태 실시간 폴링 컨트롤러 (개선된 버전)
- * - Long Polling 방식으로 좌석 상태 변경사항을 실시간으로 클라이언트에 전달
- * - DeferredResult를 활용한 비동기 응답 처리
- * - 성능 최적화 및 오류 처리 강화
+ * SeatPollingController — 좌석 상태 실시간 Long Polling 컨트롤러
+ *
+ * 이 클래스가 하는 일:
+ *   1. 클라이언트가 보낸 Long Polling 요청을 {@link DeferredResult}로 잡아 비동기 대기시킴
+ *   2. {@link SeatPollingSessionManager}에 세션을 등록하여 이벤트 발생 시 즉시 응답
+ *   3. 타임아웃 시 현재 좌석 스냅샷을 반환해 클라이언트가 폴링을 재개할 수 있도록 함
+ *   4. JWT 토큰에서 사용자 ID를 추출해 세션 메타데이터로 보관
+ *
+ * 동작 흐름:
+ *   - 요청 수신 → DeferredResult 생성 → 세션 등록
+ *   - 좌석 변경 이벤트 발생 시 SessionManager가 해당 concertId의 세션들을 깨워 응답
+ *   - 타임아웃 시 현재 상태로 응답 후 세션 제거
  */
 @Tag(name = "좌석 실시간 폴링", description = "좌석 상태 실시간 업데이트 API (Long Polling)")
 @Slf4j

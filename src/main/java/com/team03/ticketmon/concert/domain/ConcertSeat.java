@@ -11,8 +11,8 @@ import lombok.*;
 import java.math.BigDecimal;
 
 /**
- * Concert Seat Entity
- * 콘서트별 좌석 정보 (가격, 등급 포함)
+ * ConcertSeat — 특정 콘서트의 좌석 엔티티(가격·등급 포함)
+ * Concert와 Seat를 ManyToOne으로, Ticket과는 OneToOne으로 연결된다.
  */
 
 @Entity

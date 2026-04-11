@@ -6,7 +6,8 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 
 /**
- * AI 배치 요약 처리 결과를 담는 DTO
+ * AiBatchSummaryResultDTO — AI 배치 요약 처리 결과 요약 DTO
+ * 총 처리 수/성공/실패 수 및 성공률 계산 메서드를 제공한다.
  */
 
 @Getter

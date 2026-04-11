@@ -12,9 +12,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 
-/*
- * Seller Concert Update DTO
- * 판매자용 콘서트 수정 전송 객체
+/**
+ * SellerConcertUpdateDTO — 판매자 콘서트 부분 수정 요청 DTO
+ * 모든 필드가 선택적이며 null이 아닌 값만 수정 대상이 된다.
  */
 
 @Data

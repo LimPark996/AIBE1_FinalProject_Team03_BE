@@ -28,6 +28,19 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+/**
+ * PaymentApiController — 결제 관련 콜백/조회 API
+ *
+ * 이 클래스가 하는 일:
+ *   1. 토스페이먼츠 결제 성공 리다이렉트(/success)를 비동기로 수신하여 승인 처리
+ *   2. 토스페이먼츠 결제 실패 리다이렉트(/fail) 수신 및 프론트 실패 페이지로 리다이렉트
+ *   3. 로그인 사용자의 결제 내역 조회(/history)
+ *
+ * 동작 흐름(성공 콜백):
+ *   - 토스 → /success?paymentKey&orderId&amount → DeferredResult로 서블릿 쓰레드 즉시 반환
+ *   - PaymentService.confirmPayment(Reactor) 구독 → 승인 API → DB 갱신
+ *   - 완료 시 프론트 결과 페이지로 redirect URL 주입
+ */
 @Tag(name = "Payment API", description = "결제 관련 API")
 @Controller
 @Slf4j

@@ -15,9 +15,10 @@ import java.time.LocalDateTime;
 import com.team03.ticketmon.concert.domain.enums.ConcertStatus;
 import com.team03.ticketmon.concert.validation.ValidConcertTimes;
 
-/*
- * Seller Concert Create DTO
- * 판매자용 콘서트 생성 전송 객체
+/**
+ * SellerConcertCreateDTO — 판매자 콘서트 생성 요청 DTO
+ * 필수/옵션 필드의 Bean Validation과 함께 {@link ValidConcertTimes}로
+ * 공연 시간·예매 기간 간의 복합 규칙을 검증한다.
  */
 
 @Data

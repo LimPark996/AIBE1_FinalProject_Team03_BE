@@ -8,6 +8,10 @@ import com.team03.ticketmon.payment.domain.enums.PaymentStatus;
 
 import lombok.Getter;
 
+/**
+ * PaymentHistoryDto — 마이페이지 결제 내역 조회용 DTO.
+ * Payment 엔티티를 flat 하게 펼쳐 프론트에 전달한다.
+ */
 @Getter
 public class PaymentHistoryDto {
 	private String bookingNumber;

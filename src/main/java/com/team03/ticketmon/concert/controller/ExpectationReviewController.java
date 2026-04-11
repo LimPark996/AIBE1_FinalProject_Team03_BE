@@ -27,8 +27,15 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Expectation Review Controller
- * 콘서트 기대평 관련 HTTP 요청 처리
+ * ExpectationReviewController — 콘서트 기대평(관람 전) REST API
+ *
+ * 이 클래스가 하는 일:
+ *   1. 콘서트별 기대평 목록 페이징 조회 (최신순 고정 정렬)
+ *   2. 기대평 작성/수정/삭제 엔드포인트 제공
+ *
+ * 동작 흐름:
+ *   - 요청 수신 → PathVariable 검증 → ExpectationReviewService 위임
+ *     → Optional 결과를 HTTP 상태와 함께 SuccessResponse로 반환
  */
 @Tag(name = "콘서트 기대평 API", description = "콘서트 기대평 작성, 수정, 삭제, 조회 관련 API")
 @RestController

@@ -1,5 +1,8 @@
 package com.team03.ticketmon.payment.domain.enums; // 결제 도메인 하위에 생성
 
+/**
+ * PaymentStatus — 결제 진행 상태. 토스페이먼츠 상태 전이를 반영한다.
+ */
 public enum PaymentStatus {
 	PENDING,          // 결제 승인 대기
 	DONE,             // 결제 완료

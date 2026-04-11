@@ -11,9 +11,18 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * Redis Hash 기반 좌석 상태 엔티티
- * - 키: seat:status:{concertId}
- * - Hash 필드: seatId를 키로 하는 Hash 구조
+ * SeatStatus — Redis Hash 기반 좌석 상태 도메인 모델.
+ *
+ * 저장 구조:
+ *   - 키: {@code seat:status:{concertId}} (SMALL) 또는 등급/구역 기반 키(MEDIUM/LARGE)
+ *   - 필드: {@code seatId} → 직렬화된 SeatStatus
+ *
+ * 상태 전이: AVAILABLE → RESERVED(임시 선점, TTL) → BOOKED(영구 확정)
+ * 또는 RESERVED 만료 시 다시 AVAILABLE로 복귀.
+ *
+ * 불변식:
+ *   - RESERVED 상태일 때만 {@code userId}, {@code expiresAt}이 유효
+ *   - {@link #isExpired()} / {@link #getRemainingSeconds()}는 상태를 변경하지 않는 읽기 전용
  */
 @Getter
 @Builder
